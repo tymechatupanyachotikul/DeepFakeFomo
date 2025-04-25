@@ -62,7 +62,7 @@ class GenImageProcessor:
             self.label_map_folder_to_clsname[folder] = self.label_map_idx_to_clsname[idx]
 
     def __call__(self, info, use_full_name=False):
-        image_path, label = info.strip().split('\t')
+        image_path, label = info.strip().split(' ')
         filename = Path(image_path).name
         folder_or_index = filename.split('_')[0]
 
