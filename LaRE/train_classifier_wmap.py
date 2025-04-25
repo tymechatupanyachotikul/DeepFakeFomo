@@ -474,14 +474,14 @@ def main(gpu, ngpus_per_node, args):
 
     if args.test_file == '':
         test_file_list = [
-            ('annotation/val_midjourney_12k.txt', 'Midjourney'),
-            ('annotation/val_sdv4_12k.txt', 'StableDiffusionV1.4'),
-            ('annotation/val_sdv5_12k.txt', 'StableDiffusionV1.5'),
-            ('annotation/val_adm_12k.txt', 'ADM'),
-            ('annotation/val_glide_12k.txt', 'GLIDE'),
-            ('annotation/val_wukong_12k.txt', 'WuKong'),
-            ('annotation/val_vqdm_12k.txt', 'VQDM'),
-            ('annotation/val_biggan_12k.txt', 'Biggan'),
+            ('annotation/val_Midjourney_num12000.txt', 'Midjourney'),
+            ('annotation/val_stable_diffusion_v_1_4_num12000.txt', 'StableDiffusionV1.4'),
+            ('annotation/val_stable_diffusion_v_1_5_num16000.txt', 'StableDiffusionV1.5'),
+            ('annotation/val_ADM_num12000.txt', 'ADM'),
+            ('annotation/val_glide_num12000.txt', 'GLIDE'),
+            ('annotation/val_wukong_num12000.txt', 'WuKong'),
+            ('annotation/val_VQDM_num12000.txt', 'VQDM'),
+            ('annotation/val_BigGAN_num12000.txt', 'Biggan'),
         ]
     elif args.test_file == 'robust':
         test_file_list = [
