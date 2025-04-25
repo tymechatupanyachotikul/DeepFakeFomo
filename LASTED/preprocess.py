@@ -21,7 +21,7 @@ def FileList_Generation(dataset_name, split):
         path = '%s/' % data_name
         flist = sorted(os.listdir(data_root + path))
         for file in tqdm(flist):
-            img_list.append((path + file, label))
+            img_list.append((data_root + path + file, label))
     img_list2 = []
     for data_name, label in data_name_list:
         if label == 1:
@@ -31,7 +31,7 @@ def FileList_Generation(dataset_name, split):
         np.random.shuffle(flist)
         flist = flist[:len(img_list)]
         for file in tqdm(flist):
-            img_list2.append((path + file, label))
+            img_list2.append((data_root + path + file, label))
     np.random.shuffle(img_list2)
     img_list2 = img_list2[:len(img_list)]
     img_list = img_list + img_list2
