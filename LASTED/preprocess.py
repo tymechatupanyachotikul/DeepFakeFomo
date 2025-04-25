@@ -37,7 +37,7 @@ def FileList_Generation(dataset_name, split):
     img_list = img_list + img_list2
 
     print('#Images: %d' % len(img_list))
-    textfile = open(f'{save_path}{split}_{dataset_name}_num{len(img_list)}', 'w')
+    textfile = open(f'{save_path}{split}_{dataset_name}_num{len(img_list)}.txt', 'w')
     for item in img_list:
         textfile.write('%s %s\n' % (item[0], item[1]))
     textfile.close()
