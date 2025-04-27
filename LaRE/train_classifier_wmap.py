@@ -31,7 +31,6 @@ import importlib
 # from torch_kmeans import KMeans as torchKMeans
 # from torch_kmeans.utils.distances import CosineSimilarity
 from tqdm import tqdm
-from torch.utils.tensorboard import SummaryWriter
 from tabulate import tabulate
 
 logger.basicConfig(level=logger.INFO,
