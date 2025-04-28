@@ -265,7 +265,7 @@ def train_one_epoch(data_loader, model, optimizer, cur_epoch, loss_meter, args, 
 def validation_contrastive(model, args, test_file, device, ngpus_per_node):
     logger.info('Start eval')
     model.eval()
-    val_dataset = ImageDataset(args.data_root, test_file, data_size=args.data_size, split_anchor=False)
+    val_dataset = ImageDataset(args.data_root, test_file, data_size=args.data_size, split_anchor=False, map_file=args.val_map_file)
     if args.distributed:
         val_sampler = torch.utils.data.distributed.DistributedSampler(val_dataset, shuffle=False)  # drop_last=True)
     else:
@@ -455,7 +455,7 @@ def main(gpu, ngpus_per_node, args):
 
     # load data
     train_dataset = ImageDataset(args.data_root, args.train_file, data_size=args.data_size, val_ratio=None,
-                                 split_anchor=False, args=args)
+                                 split_anchor=False, args=args, map_file=args.train_map_file)
     if not args.multiprocessing_distributed or (args.multiprocessing_distributed
                                                 and args.rank % ngpus_per_node == 0):
         logger.info(f'Train dataset size: {len(train_dataset)}')
@@ -692,6 +692,8 @@ if __name__ == '__main__':
                       help='node rank for distributed training')
     conf.add_argument('-j', '--workers', default=48, type=int, metavar='N',
                       help='number of data loading workers (default: 4)')
+    conf.add_argument('--train_map_file', type=str, default='')
+    conf.add_argument('--val_map_file', type=str, default='')
     args = conf.parse_args()
     # os.environ['NUMEXPR_MAX_THREADS'] = str(min(os.cpu_count(), os.cpu_count()))
 
