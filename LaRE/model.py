@@ -8,8 +8,8 @@ from torchvision.models.resnet import resnet50
 from model_base import MultiHeadMapAttention, MultiHeadMapAttentionV2, ResNet, ResidualBlock
 
 type_to_path = {
-    'RN50x64': "/home/petterluo/pretrained_models/clip_models/RN50x64.pt",
-    'RN50': "/home/petterluo/pretrained_models/clip_models/RN50.pt",
+    'RN50x64': "RN50x64",
+    'RN50': "RN50",
 }
 
 
