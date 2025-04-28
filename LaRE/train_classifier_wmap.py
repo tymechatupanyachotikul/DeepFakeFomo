@@ -9,6 +9,7 @@ import argparse
 import numpy as np
 import warnings
 import logging as logger
+import wandb
 
 import torch
 from torch import nn
@@ -30,7 +31,6 @@ import importlib
 # from torch_kmeans import KMeans as torchKMeans
 # from torch_kmeans.utils.distances import CosineSimilarity
 from tqdm import tqdm
-from torch.utils.tensorboard import SummaryWriter
 from tabulate import tabulate
 
 logger.basicConfig(level=logger.INFO,
@@ -380,7 +380,14 @@ def main(gpu, ngpus_per_node, args):
 
     if not args.multiprocessing_distributed or (args.multiprocessing_distributed
                                                 and args.rank % ngpus_per_node == 0):
-        writer = SummaryWriter(log_dir=os.path.join(args.out_dir))
+        wandb_run = wandb.init(
+            project=args.wandb_project,
+            entity=args.wandb_entity,
+            name=args.exp_name if args.exp_name else None,
+            config=vars(args),
+            dir=args.out_dir
+        )
+        writer = WandbWriter(wandb_run)
     else:
         if not args.multiprocessing_distributed or (args.multiprocessing_distributed
                                                     and args.rank % ngpus_per_node == 0):
@@ -644,6 +651,19 @@ class FakeWriter:
     def add_scalar(self, p1, p2, p3):
         pass
 
+class WandbWriter:
+    def __init__(self, run=None):
+        self.run = run
+        self.step_count = {}
+
+    def add_scalar(self, tag, value, step=None):
+        if step is None:
+            if tag not in self.step_count:
+                self.step_count[tag] = 0
+            self.step_count[tag] += 1
+            step = self.step_count[tag]
+        
+        wandb.log({tag: value}, step=step)
 
 if __name__ == '__main__':
     conf = argparse.ArgumentParser()
@@ -692,6 +712,10 @@ if __name__ == '__main__':
                       help='node rank for distributed training')
     conf.add_argument('-j', '--workers', default=48, type=int, metavar='N',
                       help='number of data loading workers (default: 4)')
+    conf.add_argument("--wandb_project", type=str, default="LaRE", 
+                      help="Weights & Biases project name")
+    conf.add_argument("--wandb_entity", type=str, default="deep-fake-uva", 
+                      help="Weights & Biases entity name (username or team name)")
     conf.add_argument('--train_map_file', type=str, default='')
     conf.add_argument('--val_map_file', type=str, default='')
     args = conf.parse_args()
