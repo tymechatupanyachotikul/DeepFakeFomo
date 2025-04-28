@@ -265,7 +265,7 @@ def train_one_epoch(data_loader, model, optimizer, cur_epoch, loss_meter, args, 
 def validation_contrastive(model, args, test_file, device, ngpus_per_node):
     logger.info('Start eval')
     model.eval()
-    val_dataset = ImageDataset(args.data_root, test_file, data_size=args.data_size, split_anchor=False)
+    val_dataset = ImageDataset(args.data_root, test_file, data_size=args.data_size, split_anchor=False, map_file=args.val_map_file)
     if args.distributed:
         val_sampler = torch.utils.data.distributed.DistributedSampler(val_dataset, shuffle=False)  # drop_last=True)
     else:
@@ -462,7 +462,7 @@ def main(gpu, ngpus_per_node, args):
 
     # load data
     train_dataset = ImageDataset(args.data_root, args.train_file, data_size=args.data_size, val_ratio=None,
-                                 split_anchor=False, args=args)
+                                 split_anchor=False, args=args, map_file=args.train_map_file)
     if not args.multiprocessing_distributed or (args.multiprocessing_distributed
                                                 and args.rank % ngpus_per_node == 0):
         logger.info(f'Train dataset size: {len(train_dataset)}')
@@ -481,14 +481,14 @@ def main(gpu, ngpus_per_node, args):
 
     if args.test_file == '':
         test_file_list = [
-            ('annotation/val_midjourney_12k.txt', 'Midjourney'),
-            ('annotation/val_sdv4_12k.txt', 'StableDiffusionV1.4'),
-            ('annotation/val_sdv5_12k.txt', 'StableDiffusionV1.5'),
-            ('annotation/val_adm_12k.txt', 'ADM'),
-            ('annotation/val_glide_12k.txt', 'GLIDE'),
-            ('annotation/val_wukong_12k.txt', 'WuKong'),
-            ('annotation/val_vqdm_12k.txt', 'VQDM'),
-            ('annotation/val_biggan_12k.txt', 'Biggan'),
+            ('annotation/val_Midjourney_num12000.txt', 'Midjourney'),
+            ('annotation/val_stable_diffusion_v_1_4_num12000.txt', 'StableDiffusionV1.4'),
+            ('annotation/val_stable_diffusion_v_1_5_num16000.txt', 'StableDiffusionV1.5'),
+            ('annotation/val_ADM_num12000.txt', 'ADM'),
+            ('annotation/val_glide_num12000.txt', 'GLIDE'),
+            ('annotation/val_wukong_num12000.txt', 'WuKong'),
+            ('annotation/val_VQDM_num12000.txt', 'VQDM'),
+            ('annotation/val_BigGAN_num12000.txt', 'Biggan'),
         ]
     elif args.test_file == 'robust':
         test_file_list = [
@@ -716,6 +716,8 @@ if __name__ == '__main__':
                       help="Weights & Biases project name")
     conf.add_argument("--wandb_entity", type=str, default="deep-fake-uva", 
                       help="Weights & Biases entity name (username or team name)")
+    conf.add_argument('--train_map_file', type=str, default='')
+    conf.add_argument('--val_map_file', type=str, default='')
     args = conf.parse_args()
     # os.environ['NUMEXPR_MAX_THREADS'] = str(min(os.cpu_count(), os.cpu_count()))
 

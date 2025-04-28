@@ -9,3 +9,4 @@ pip install -U matplotlib
 pip install transformers
 pip install ipympl
 pip install triton
+pip install torchvision
