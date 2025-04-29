@@ -264,7 +264,7 @@ def train_one_epoch(data_loader, model, optimizer, cur_epoch, loss_meter, args, 
 def validation_contrastive(model, args, test_file, device, ngpus_per_node):
     logger.info('Start eval')
     model.eval()
-    val_dataset = ImageDataset(args.data_root, test_file, data_size=args.data_size, split_anchor=False)
+    val_dataset = ImageDataset(args.data_root, test_file, data_size=args.data_size, split_anchor=False, args=args)
     if args.distributed:
         val_sampler = torch.utils.data.distributed.DistributedSampler(val_dataset, shuffle=False)  # drop_last=True)
     else:
@@ -550,7 +550,8 @@ def main(gpu, ngpus_per_node, args):
             elif args.val_method == 'sim':
                 val_auc, val_acc, val_ap = validation_similarity(model, args, args.val_file)
             else:
-                val_auc, val_acc, val_ap, val_raw_acc, val_r_acc, val_f_acc = validation_contrastive(model, args,
+                val_auc, val_acc, val_ap, val_raw_acc, val_r_acc, val_f_acc = validation_contrastive(model,
+                                                                                                     args,
                                                                                                      args.val_file,
                                                                                                      device,
                                                                                                      ngpus_per_node)
