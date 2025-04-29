@@ -91,8 +91,7 @@ class LabelSmoothingLoss(nn.Module):
 class ImageDataset(Dataset):
     def __init__(self, data_root, train_file,
                  data_size=512, val_ratio=None, split_anchor=True,
-                 args=None,
-                 map_file='/home/petterluo/project/FakeImageDetection/outputs/all_map_anns_final.txt',
+                 args=None
                  ):
         self.data_root = data_root
         self.data_size = data_size
@@ -151,7 +150,7 @@ class ImageDataset(Dataset):
         # print('len train:', len(self.train_list))
         # print('len test:', len(self.test_list))
         filename_to_loss = {}
-        with open(map_file) as f:
+        with open(args.map_file) as f:
             for line in f:
                 image_path, label = line.strip().split('\t')
                 filename = image_path.split('/')[-1].split('.')[0]
@@ -265,7 +264,7 @@ def train_one_epoch(data_loader, model, optimizer, cur_epoch, loss_meter, args, 
 def validation_contrastive(model, args, test_file, device, ngpus_per_node):
     logger.info('Start eval')
     model.eval()
-    val_dataset = ImageDataset(args.data_root, test_file, data_size=args.data_size, split_anchor=False, map_file=args.val_map_file)
+    val_dataset = ImageDataset(args.data_root, test_file, data_size=args.data_size, split_anchor=False)
     if args.distributed:
         val_sampler = torch.utils.data.distributed.DistributedSampler(val_dataset, shuffle=False)  # drop_last=True)
     else:
@@ -462,7 +461,7 @@ def main(gpu, ngpus_per_node, args):
 
     # load data
     train_dataset = ImageDataset(args.data_root, args.train_file, data_size=args.data_size, val_ratio=None,
-                                 split_anchor=False, args=args, map_file=args.train_map_file)
+                                 split_anchor=False, args=args)
     if not args.multiprocessing_distributed or (args.multiprocessing_distributed
                                                 and args.rank % ngpus_per_node == 0):
         logger.info(f'Train dataset size: {len(train_dataset)}')
@@ -716,8 +715,7 @@ if __name__ == '__main__':
                       help="Weights & Biases project name")
     conf.add_argument("--wandb_entity", type=str, default="deep-fake-uva", 
                       help="Weights & Biases entity name (username or team name)")
-    conf.add_argument('--train_map_file', type=str, default='')
-    conf.add_argument('--val_map_file', type=str, default='')
+    conf.add_argument('--map_file', type=str, default='')
     args = conf.parse_args()
     # os.environ['NUMEXPR_MAX_THREADS'] = str(min(os.cpu_count(), os.cpu_count()))
 
