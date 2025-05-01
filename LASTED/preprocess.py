@@ -67,4 +67,4 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    FileList_Generation(args.dataset_name, args.split, args.reconstructed)
+    FileList_Generation(args.dataset_name, args.split, args.reconstructed, args.reconstruct_only)
