@@ -43,7 +43,7 @@ def FileList_Generation(dataset_name, split, reconstructed, reconstruct_only):
 
     print('#Images: %d' % len(img_list))
     if reconstructed:
-        textfile = open(f'{save_path}reconstruct_{dataset_name}.txt', 'w')
+        textfile = open(f'{save_path}{split}_{dataset_name}_reconstruct_only.txt', 'w')
     else:
         textfile = open(f'{save_path}{split}_{dataset_name}{"_reconstructed" if reconstructed else ""}.txt', 'w')
     for item in img_list:
