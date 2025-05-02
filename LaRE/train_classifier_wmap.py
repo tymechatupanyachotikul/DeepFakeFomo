@@ -252,8 +252,8 @@ def train_one_epoch(data_loader, model, optimizer, cur_epoch, loss_meter, args, 
             logger.info(
                 'Ep %03d, it %03d/%03d, lr: %8.7f, CE: %7.6f' % (cur_epoch, batch_idx, len(data_loader), lr, loss_avg))
             loss_meter.reset()
-            writer.add_scalar('train/loss', loss_avg, loss_meter.count)
-            writer.add_scalar('train/lr', lr, loss_meter.count)
+            writer.add_scalar('train/loss', loss_avg, batch_idx)
+            writer.add_scalar('train/lr', lr, batch_idx)
         if args.break_onek and batch_idx > 1000:  # ?
             break
         batch_idx += 1
@@ -386,6 +386,7 @@ def main(gpu, ngpus_per_node, args):
             config=vars(args),
             dir=args.out_dir
         )
+        wandb.log({"run_type": "training"})
         writer = WandbWriter(wandb_run)
     else:
         if not args.multiprocessing_distributed or (args.multiprocessing_distributed
