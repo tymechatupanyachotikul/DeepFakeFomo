@@ -257,6 +257,7 @@ if __name__ == '__main__':
     # preprocess anns
     genimage_processor = GenImageProcessor()
     out_infos = []
+    filtered_infos = []
     for info in tqdm(input_infos):
         _image_path, _ = info.strip().split(' ')
         if os.path.exists(opj(args.output_path, Path(_image_path).name.split('.')[0] + '.pt')):
@@ -267,6 +268,7 @@ if __name__ == '__main__':
         save_path = opj(args.output_path, filename.split('.')[0] + '.pt')
         out_info = '\t'.join([save_path, label]) + '\n'
         out_infos.append(out_info)
+        filtered_infos.append(info)
     info_save_path = opj(args.output_path, 'ann.txt')
     if os.path.exists(info_save_path):
         with open(info_save_path, "a+") as f:
@@ -278,7 +280,7 @@ if __name__ == '__main__':
 
     num_gpus = torch.cuda.device_count()
     assert num_gpus == args.n_gpus
-    splited_infos = split_list(input_infos, num_gpus)
+    splited_infos = split_list(filtered_infos, num_gpus)
     # run
 
     # debug
