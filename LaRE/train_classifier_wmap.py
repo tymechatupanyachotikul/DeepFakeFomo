@@ -198,6 +198,7 @@ class ImageDataset(Dataset):
 
         if not os.path.exists(image_path):
             image_path = os.path.join(self.data_root, image_path)
+        logger.info(f'image_path: {image_path}')
         image = cv2.imread(image_path)
 
         if image is None:
