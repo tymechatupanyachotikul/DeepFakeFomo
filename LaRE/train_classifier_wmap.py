@@ -252,8 +252,10 @@ def train_one_epoch(data_loader, model, optimizer, cur_epoch, loss_meter, args, 
             logger.info(
                 'Ep %03d, it %03d/%03d, lr: %8.7f, CE: %7.6f' % (cur_epoch, batch_idx, len(data_loader), lr, loss_avg))
             loss_meter.reset()
-            writer.add_scalar('train/loss', loss_avg, batch_idx)
-            writer.add_scalar('train/lr', lr, batch_idx)
+
+            writer.add_scalar('train/loss', loss_avg, loss_meter.batch_idx)
+            writer.add_scalar('train/lr', lr, loss_meter.count)
+
         if args.break_onek and batch_idx > 1000:  # ?
             break
         batch_idx += 1
@@ -563,6 +565,7 @@ def main(gpu, ngpus_per_node, args):
                 logger.info(
                     f'Score: Validation AUC: {val_auc:.4f}, Acc: {val_acc:.4f}, AP: {val_ap:.4f}, Raw ACC{val_raw_acc:.4f},'
                     f' Real ACC: {val_r_acc:.4f}, Fake ACC: {val_f_acc:.4f}')
+                logger.info('logging val to wandb')
                 writer.add_scalar('val/AUC', val_auc, epoch)
                 writer.add_scalar('val/ACC', val_acc, epoch)
                 writer.add_scalar('val/AP', val_ap, epoch)
@@ -601,7 +604,8 @@ def main(gpu, ngpus_per_node, args):
                 logger.info(f'Eval res of {test_file}')
                 logger.info(
                     f'Score of {nickname}: AUC: {test_auc:.4f}, Acc: {test_acc:.4f}, AP: {test_ap:.4f}'
-                    f', Raw ACC: {test_raw_acc:.4f}, Real ACC: {test_r_acc:.4f}, Fake ACC: {test_f_acc:.4f}')
+                    f', Raw ACC: {test_raw_acc:.4f}, Real ACC: {test_r_acc:.4f}, Fake ACC: {test_f_acc:.4f}'
+                logger.info('logging test to wandb')
                 writer.add_scalar(f'test/AUC@{nickname}', test_auc, epoch)
                 writer.add_scalar(f'test/ACC@{nickname}', test_acc, epoch)
                 writer.add_scalar(f'test/AP@{nickname}', test_ap, epoch)
