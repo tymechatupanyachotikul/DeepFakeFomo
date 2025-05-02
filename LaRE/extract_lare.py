@@ -258,6 +258,11 @@ if __name__ == '__main__':
     genimage_processor = GenImageProcessor()
     out_infos = []
     for info in tqdm(input_infos):
+        _image_path, _ = info.strip().split(' ')
+        if os.path.exists(opj(args.output_path, Path(_image_path).name.split('.')[0] + '.pt')):
+            print(f'skip {opj(args.output_path, Path(_image_path).name.split(".")[0] + ".pt")}')
+            continue
+
         image_path, label, filename, clsname = genimage_processor(info, use_full_name=args.use_full_clsname)
         save_path = opj(args.output_path, filename.split('.')[0] + '.pt')
         out_info = '\t'.join([save_path, label]) + '\n'
