@@ -562,6 +562,7 @@ def main(gpu, ngpus_per_node, args):
                 logger.info(
                     f'Score: Validation AUC: {val_auc:.4f}, Acc: {val_acc:.4f}, AP: {val_ap:.4f}, Raw ACC{val_raw_acc:.4f},'
                     f' Real ACC: {val_r_acc:.4f}, Fake ACC: {val_f_acc:.4f}')
+                logger.info('logging val to wandb')
                 writer.add_scalar('val/AUC', val_auc, epoch)
                 writer.add_scalar('val/ACC', val_acc, epoch)
                 writer.add_scalar('val/AP', val_ap, epoch)
@@ -600,7 +601,8 @@ def main(gpu, ngpus_per_node, args):
                 logger.info(f'Eval res of {test_file}')
                 logger.info(
                     f'Score of {nickname}: AUC: {test_auc:.4f}, Acc: {test_acc:.4f}, AP: {test_ap:.4f}'
-                    f', Raw ACC: {test_raw_acc:.4f}, Real ACC: {test_r_acc:.4f}, Fake ACC: {test_f_acc:.4f}')
+                    f', Raw ACC: {test_raw_acc:.4f}, Real ACC: {test_r_acc:.4f}, Fake ACC: {test_f_acc:.4f}'
+                logger.info('logging test to wandb')
                 writer.add_scalar(f'test/AUC@{nickname}', test_auc, epoch)
                 writer.add_scalar(f'test/ACC@{nickname}', test_acc, epoch)
                 writer.add_scalar(f'test/AP@{nickname}', test_ap, epoch)
