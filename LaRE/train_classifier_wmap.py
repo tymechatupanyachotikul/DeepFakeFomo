@@ -194,8 +194,11 @@ class ImageDataset(Dataset):
     def getitem(self, index, data_list):
         image_path, onehot_label = data_list[index]
         map_path = self.ordered_map_paths[index]
-
-        loss_map = torch.load(map_path)
+        try:
+            loss_map = torch.load(map_path)
+        except Exception as e:
+            logger.info(f'Failed to load {map_path}')
+            return None, None, None
 
         if not os.path.exists(image_path):
             image_path = os.path.join(self.data_root, image_path)
@@ -228,6 +231,8 @@ def train_one_epoch(data_loader, model, optimizer, cur_epoch, loss_meter, args, 
     batch_idx = 0
     loss_avg = 0
     for (images, labels, loss_maps) in data_loader:
+        if images is None:
+            continue
         images = images.to(device)
         labels = labels.to(device).flatten().squeeze()
         loss_maps = loss_maps.to(device)
