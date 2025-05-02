@@ -268,8 +268,13 @@ if __name__ == '__main__':
         out_info = '\t'.join([save_path, label]) + '\n'
         out_infos.append(out_info)
     info_save_path = opj(args.output_path, 'ann.txt')
-    with open(info_save_path, 'w') as f:
-        f.writelines(out_infos)
+    if os.path.exists(info_save_path):
+        with open(info_save_path, "a+") as f:
+            # Append new content
+            f.writelines(out_infos)
+    else:
+        with open(info_save_path, 'w') as f:
+            f.writelines(out_infos)
 
     num_gpus = torch.cuda.device_count()
     assert num_gpus == args.n_gpus
