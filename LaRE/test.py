@@ -31,7 +31,6 @@ import importlib
 # from torch_kmeans import KMeans as torchKMeans
 # from torch_kmeans.utils.distances import CosineSimilarity
 from tqdm import tqdm
-from torch.utils.tensorboard import SummaryWriter
 from tabulate import tabulate
 
 logger.basicConfig(level=logger.INFO,
@@ -100,7 +99,6 @@ class ImageDataset(Dataset):
     def __init__(self, data_root, train_file,
                  data_size=512, val_ratio=None, split_anchor=True,
                  args=None,
-                 map_file='/home/petterluo/project/FakeImageDetection/outputs/all_map_anns_final.txt',
                  ):
         self.data_root = data_root
         self.data_size = data_size
@@ -160,7 +158,7 @@ class ImageDataset(Dataset):
         # print('len test:', len(self.test_list))
         filename_to_loss = {}
         # 构建图像文件名到lare特征的字典
-        with open(map_file) as f:
+        with open(args.map_file) as f:
             for line in f:
                 image_path, label = line.strip().split('\t')
                 filename = image_path.split('/')[-1].split('.')[0]
@@ -262,8 +260,8 @@ def train_one_epoch(data_loader, model, optimizer, cur_epoch, loss_meter, args, 
             logger.info(
                 'Ep %03d, it %03d/%03d, lr: %8.7f, CE: %7.6f' % (cur_epoch, batch_idx, len(data_loader), lr, loss_avg))
             loss_meter.reset()
-            writer.add_scalar('train/loss', loss_avg, loss_meter.count)
-            writer.add_scalar('train/lr', lr, loss_meter.count)
+            writer.add_scalar('train/loss', loss_avg)
+            writer.add_scalar('train/lr', lr)
         if args.break_onek and batch_idx > 1000:  # ?
             break
         batch_idx += 1
@@ -397,6 +395,7 @@ def main(gpu, ngpus_per_node, args):
             config=vars(args),
             dir=args.out_dir
         )
+        wandb.log({"run_type": "inference"})
         writer = WandbWriter(wandb_run)
         
     else:
@@ -556,12 +555,12 @@ def main(gpu, ngpus_per_node, args):
                 logger.info(
                     f'Score of {nickname}: AUC: {test_auc:.4f}, Acc: {test_acc:.4f}, AP: {test_ap:.4f}'
                     f', Raw ACC: {test_raw_acc:.4f}, Real ACC: {test_r_acc:.4f}, Fake ACC: {test_f_acc:.4f}')
-                writer.add_scalar(f'test/AUC@{nickname}', test_auc, epoch)
-                writer.add_scalar(f'test/ACC@{nickname}', test_acc, epoch)
-                writer.add_scalar(f'test/AP@{nickname}', test_ap, epoch)
-                writer.add_scalar(f'test/RawACC@{nickname}', test_raw_acc, epoch)
-                writer.add_scalar(f'test/RealACC@{nickname}', test_r_acc, epoch)
-                writer.add_scalar(f'test/FakeACC@{nickname}', test_f_acc, epoch)
+                writer.add_scalar(f'test/AUC@{nickname}', test_auc)
+                writer.add_scalar(f'test/ACC@{nickname}', test_acc)
+                writer.add_scalar(f'test/AP@{nickname}', test_ap)
+                writer.add_scalar(f'test/RawACC@{nickname}', test_raw_acc)
+                writer.add_scalar(f'test/RealACC@{nickname}', test_r_acc)
+                writer.add_scalar(f'test/FakeACC@{nickname}', test_f_acc)
 
                 table_header.append(nickname)
                 acc_row.append(test_acc)
@@ -577,7 +576,7 @@ def main(gpu, ngpus_per_node, args):
             table_data = [acc_row, raw_acc_row, ap_row, auc_row, real_acc_row, fake_acc_row]
             logger.info('\n' + tabulate(table_data, headers=table_header, tablefmt='psql'))
 
-            writer.add_scalar('test/AVGAUC', test_score, epoch)
+            writer.add_scalar('test/AVGAUC', test_score)
             isBest = '(Not Best)'
             if args.isTrain and test_score > test_best:
                 test_best = test_score
@@ -671,6 +670,7 @@ if __name__ == '__main__':
                       help="Weights & Biases project name")
     conf.add_argument("--wandb_entity", type=str, default="deep-fake-uva", 
                       help="Weights & Biases entity name (username or team name)")
+    conf.add_argument('--map_file', type=str, default='')
     args = conf.parse_args()
     # os.environ['NUMEXPR_MAX_THREADS'] = str(min(os.cpu_count(), os.cpu_count()))
 
