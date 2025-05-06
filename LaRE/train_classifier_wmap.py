@@ -198,7 +198,7 @@ class ImageDataset(Dataset):
 
         if not os.path.exists(image_path):
             image_path = os.path.join(self.data_root, image_path)
-        logger.info(f'image_path: {image_path}')
+
         image = cv2.imread(image_path)
 
         if image is None:
@@ -350,8 +350,15 @@ def validation_contrastive(model, args, test_file, device, ngpus_per_node):
     if not args.multiprocessing_distributed or (args.multiprocessing_distributed
                                                 and args.rank % ngpus_per_node == 0):
         logger.info(f'Search ACC: {best_acc}, Search Thresh: {best_thresh}')
+        logger.info(f'GT: Num positive : {gt_labels_list[gt_labels_list == 0].shape[0]}, '
+                    f'Num negative : {gt_labels_list[gt_labels_list == 1].shape[0]}'
+        )
+        logger.info(
+            f'Pred: Num positive : {prob_labels_list[prob_labels_list < 0.5].shape[0]}, '
+            f'Num negative : {prob_labels_list[prob_labels_list > 0.5].shape[0]}'
+        )
 
-    r_acc = accuracy_score(gt_labels_list[gt_labels_list == 0], prob_labels_list[gt_labels_list == 0] > 0.5)
+    r_acc = accuracy_score(gt_labels_list[gt_labels_list == 0], prob_labels_list[gt_labels_list == 0] < 0.5)
     f_acc = accuracy_score(gt_labels_list[gt_labels_list == 1], prob_labels_list[gt_labels_list == 1] > 0.5)
     raw_acc = accuracy_score(gt_labels_list, prob_labels_list > 0.5)
     return auc, best_acc, ap, raw_acc, r_acc, f_acc
