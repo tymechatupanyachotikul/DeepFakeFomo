@@ -360,7 +360,7 @@ def validation_contrastive(model, args, test_file, device, ngpus_per_node):
             f'Num negative : {prob_labels_list[prob_labels_list > 0.5].shape[0]}'
         )
 
-    r_acc = accuracy_score(gt_labels_list[gt_labels_list == 0], prob_labels_list[gt_labels_list == 0] < 0.5)
+    r_acc = accuracy_score(gt_labels_list[gt_labels_list == 0], prob_labels_list[gt_labels_list == 0] > 0.5)
     f_acc = accuracy_score(gt_labels_list[gt_labels_list == 1], prob_labels_list[gt_labels_list == 1] > 0.5)
     raw_acc = accuracy_score(gt_labels_list, prob_labels_list > 0.5)
     return auc, best_acc, ap, raw_acc, r_acc, f_acc
