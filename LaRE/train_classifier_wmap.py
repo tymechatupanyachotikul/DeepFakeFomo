@@ -252,8 +252,10 @@ def train_one_epoch(data_loader, model, optimizer, cur_epoch, loss_meter, args, 
             logger.info(
                 'Ep %03d, it %03d/%03d, lr: %8.7f, CE: %7.6f' % (cur_epoch, batch_idx, len(data_loader), lr, loss_avg))
             loss_meter.reset()
-            writer.add_scalar('train/loss', loss_avg, batch_idx)
-            writer.add_scalar('train/lr', lr, loss_meter.count)
+
+            writer.add_scalar('train/loss', loss_avg)
+            writer.add_scalar('train/lr', lr)
+
         if args.break_onek and batch_idx > 1000:  # ?
             break
         batch_idx += 1
@@ -393,6 +395,7 @@ def main(gpu, ngpus_per_node, args):
             config=vars(args),
             dir=args.out_dir
         )
+        wandb.log({"run_type": "training"})
         writer = WandbWriter(wandb_run)
     else:
         if not args.multiprocessing_distributed or (args.multiprocessing_distributed
@@ -570,12 +573,12 @@ def main(gpu, ngpus_per_node, args):
                     f'Score: Validation AUC: {val_auc:.4f}, Acc: {val_acc:.4f}, AP: {val_ap:.4f}, Raw ACC{val_raw_acc:.4f},'
                     f' Real ACC: {val_r_acc:.4f}, Fake ACC: {val_f_acc:.4f}')
                 logger.info('logging val to wandb')
-                writer.add_scalar('val/AUC', val_auc, epoch)
-                writer.add_scalar('val/ACC', val_acc, epoch)
-                writer.add_scalar('val/AP', val_ap, epoch)
-                writer.add_scalar('val/RawACC', val_raw_acc, epoch)
-                writer.add_scalar('val/RealACC', val_r_acc, epoch)
-                writer.add_scalar('val/FakeACC', val_f_acc, epoch)
+                writer.add_scalar('val/AUC', val_auc)
+                writer.add_scalar('val/ACC', val_acc)
+                writer.add_scalar('val/AP', val_ap)
+                writer.add_scalar('val/RawACC', val_raw_acc)
+                writer.add_scalar('val/RealACC', val_r_acc)
+                writer.add_scalar('val/FakeACC', val_f_acc)
                 if val_acc > test_best_close:
                     test_best_close = val_acc
                     saved_name = 'Val_best.pth'
@@ -610,12 +613,12 @@ def main(gpu, ngpus_per_node, args):
                     f'Score of {nickname}: AUC: {test_auc:.4f}, Acc: {test_acc:.4f}, AP: {test_ap:.4f}'
                     f', Raw ACC: {test_raw_acc:.4f}, Real ACC: {test_r_acc:.4f}, Fake ACC: {test_f_acc:.4f}')
                 logger.info('logging test to wandb')
-                writer.add_scalar(f'test/AUC@{nickname}', test_auc, epoch)
-                writer.add_scalar(f'test/ACC@{nickname}', test_acc, epoch)
-                writer.add_scalar(f'test/AP@{nickname}', test_ap, epoch)
-                writer.add_scalar(f'test/RawACC@{nickname}', test_raw_acc, epoch)
-                writer.add_scalar(f'test/RealACC@{nickname}', test_r_acc, epoch)
-                writer.add_scalar(f'test/FakeACC@{nickname}', test_f_acc, epoch)
+                writer.add_scalar(f'test/AUC@{nickname}', test_auc)
+                writer.add_scalar(f'test/ACC@{nickname}', test_acc)
+                writer.add_scalar(f'test/AP@{nickname}', test_ap)
+                writer.add_scalar(f'test/RawACC@{nickname}', test_raw_acc)
+                writer.add_scalar(f'test/RealACC@{nickname}', test_r_acc)
+                writer.add_scalar(f'test/FakeACC@{nickname}', test_f_acc)
 
                 table_header.append(nickname)
                 acc_row.append(test_acc)
@@ -631,7 +634,7 @@ def main(gpu, ngpus_per_node, args):
             table_data = [acc_row, raw_acc_row, ap_row, auc_row, real_acc_row, fake_acc_row]
             logger.info('\n' + tabulate(table_data, headers=table_header, tablefmt='psql'))
 
-            writer.add_scalar('test/AVGAUC', test_score, epoch)
+            writer.add_scalar('test/AVGAUC', test_score)
             isBest = '(Not Best)'
             if args.isTrain and test_score > test_best:
                 test_best = test_score
