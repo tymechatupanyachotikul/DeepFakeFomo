@@ -115,10 +115,12 @@ class ImageDataset(Dataset):
         self.albu_pre_train_easy = A.Compose([
             A.PadIfNeeded(min_height=self.data_size, min_width=self.data_size, p=1.0),
             A.RandomCrop(height=self.data_size, width=self.data_size, p=1.0),
+            A.ImageCompression(quality_lower=99, quality_upper=100, p=1.0),
         ], p=1.0)
         self.albu_pre_val = A.Compose([
             A.PadIfNeeded(min_height=self.data_size, min_width=self.data_size, p=1.0),
             A.CenterCrop(height=self.data_size, width=self.data_size, p=1.0),
+            A.ImageCompression(quality_lower=99, quality_upper=100, p=1.0),
         ], p=1.0)
         self.imagenet_norm = transforms.Compose([
             transforms.ToPILImage(),
@@ -395,7 +397,6 @@ def main(gpu, ngpus_per_node, args):
             config=vars(args),
             dir=args.out_dir
         )
-        wandb.log({"run_type": "training"})
         writer = WandbWriter(wandb_run)
     else:
         if not args.multiprocessing_distributed or (args.multiprocessing_distributed
@@ -675,7 +676,7 @@ class WandbWriter:
             self.step_count[tag] += 1
             step = self.step_count[tag]
         
-        wandb.log({tag: value}, step=step)
+        wandb.log({tag: value})
 
 if __name__ == '__main__':
     conf = argparse.ArgumentParser()

@@ -122,10 +122,12 @@ class ImageDataset(Dataset):
         self.albu_pre_train_easy = A.Compose([
             A.PadIfNeeded(min_height=self.data_size, min_width=self.data_size, p=1.0),
             A.RandomCrop(height=self.data_size, width=self.data_size, p=1.0),
+            A.ImageCompression(quality_lower=99, quality_upper=100, p=1.0),
         ], p=1.0)
         self.albu_pre_val = A.Compose([
             A.PadIfNeeded(min_height=self.data_size, min_width=self.data_size, p=1.0),
             A.CenterCrop(height=self.data_size, width=self.data_size, p=1.0),
+            A.ImageCompression(quality_lower=99, quality_upper=100, p=1.0),
         ], p=1.0)
         self.imagenet_norm = transforms.Compose([
             transforms.ToPILImage(),
@@ -207,7 +209,7 @@ class ImageDataset(Dataset):
 
         if not os.path.exists(image_path):
             image_path = os.path.join(self.data_root, image_path)
-        image = cv2.imread(image_path)
+        image = cv2.imread(image_path, cv2.IMREAD_COLOR)
 
         if image is None:
             logger.info('Error Image: %s' % image_path)
@@ -272,7 +274,7 @@ def train_one_epoch(data_loader, model, optimizer, cur_epoch, loss_meter, args, 
 def validation_contrastive(model, args, test_file, device, ngpus_per_node):
     logger.info('Start eval')
     model.eval()
-    val_dataset = ImageDataset(args.data_root, test_file, data_size=args.data_size, split_anchor=False)
+    val_dataset = ImageDataset(args.data_root, test_file, data_size=args.data_size, split_anchor=False, args=args)
     if args.distributed:
         val_sampler = torch.utils.data.distributed.DistributedSampler(val_dataset, shuffle=False)  # drop_last=True)
     else:
@@ -395,7 +397,6 @@ def main(gpu, ngpus_per_node, args):
             config=vars(args),
             dir=args.out_dir
         )
-        wandb.log({"run_type": "inference"})
         writer = WandbWriter(wandb_run)
         
     else:
@@ -617,7 +618,7 @@ class WandbWriter:
             self.step_count[tag] += 1
             step = self.step_count[tag]
         
-        wandb.log({tag: value}, step=step)
+        wandb.log({tag: value})
 
 if __name__ == '__main__':
     conf = argparse.ArgumentParser()

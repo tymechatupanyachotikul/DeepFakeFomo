@@ -1,6 +1,7 @@
 import os
 import random
 import shutil
+import tarfile
 from pathlib import Path
 
 from os.path import join as opj
@@ -66,6 +67,8 @@ class GenImageProcessor:
         filename = Path(image_path).name
         folder_or_index = filename.split('_')[0]
 
+        print(f'Filename: {filename}')
+
         try:
             if len(folder_or_index) <= 3:  # is a index
                 index = str(int(folder_or_index))
@@ -95,19 +98,13 @@ class GenImageProcessor:
 
 
 def main(args, input_infos, device):
-    unet = UNet2DConditionModel.from_pretrained(
-        args.pretrained_model_name_or_path, subfolder="unet", revision=None,
-    )
-    text_encoder = CLIPTextModel.from_pretrained(
-        args.pretrained_model_name_or_path, subfolder="text_encoder", revision=None,
-    )
-    tokenizer = CLIPTokenizer.from_pretrained(
-        args.pretrained_model_name_or_path, subfolder="tokenizer", revision=None,
-    )
-    # text_encoder = CLIPVisionModel.from_pretrained(
-    #     args.clip_path,
-    # )
-    # clip_processor = AutoProcessor.from_pretrained(args.clip_path)
+
+    tar = tarfile.open(args.dataset_file, 'r:gz')
+    
+    unet = UNet2DConditionModel.from_pretrained(args.pretrained_model_name_or_path, subfolder="unet", revision=None)
+    text_encoder = CLIPTextModel.from_pretrained(args.pretrained_model_name_or_path, subfolder="text_encoder", revision=None)
+    tokenizer = CLIPTokenizer.from_pretrained(args.pretrained_model_name_or_path, subfolder="tokenizer", revision=None)
+
     print('Load VAE')
     vae = AutoencoderKL.from_pretrained(
         args.pretrained_model_name_or_path, subfolder="vae", revision=None
@@ -119,27 +116,31 @@ def main(args, input_infos, device):
         vae = vae.half()
 
     noise_scheduler = DDPMScheduler.from_pretrained(args.pretrained_model_name_or_path, subfolder="scheduler")
-    # type is epsilon
     print(f'noise pred type: {noise_scheduler.config.prediction_type}')
+
     vae.requires_grad_(False)
     text_encoder.requires_grad_(False)
     unet.requires_grad_(False)
 
     vae = vae.to(device)
     text_encoder = text_encoder.to(device)
-    # clip_model = clip_model.to('cuda')
     unet = unet.to(device)
 
     unet.eval()
     vae.eval()
     text_encoder.eval()
     genimage_processor = GenImageProcessor()
+
     for info in tqdm(input_infos):
+
         image_path, label, filename, clsname = genimage_processor(info, use_full_name=args.use_full_clsname)
         save_path = opj(args.output_path, filename.split('.')[0] + '.pt')
+
         try:
-            img = Image.open(image_path).convert('RGB')
-        except PIL.UnidentifiedImageError:
+            member = tar.getmember(image_path)
+            fobj = tar.extractfile(member)
+            img = Image.open(fobj).convert('RGB')
+        except Exception:
             print(f'Bad Image {filename}')
             torch.save(torch.zeros((4, 32, 32)), save_path)
             continue
@@ -148,13 +149,11 @@ def main(args, input_infos, device):
             img = img.resize(args.img_size)
         img_tensor = (transforms.PILToTensor()(img) / 255.0 - 0.5) * 2
         image_sd = img_tensor.unsqueeze(0).to(device)
-        # image_clip = image_clip.to(device)
 
         if args.dtype == "fp16":
             image_sd = image_sd.half()
             image_clip = image_clip.half()
-        # print(image_sd.shape)
-        # print(image_clip.shape)
+
         latents = vae.encode(image_sd).latent_dist.sample()
         latents = latents * vae.config.scaling_factor
 
@@ -162,8 +161,7 @@ def main(args, input_infos, device):
         bsz = latents.shape[0]
 
         noise = torch.randn_like(latents)
-        timesteps = torch.randint(args.t, args.t + 1, (bsz,),
-                                  device=latents.device)  # 1000
+        timesteps = torch.randint(args.t, args.t + 1, (bsz,), device=latents.device)  # 1000
         timesteps = timesteps.long()
         noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps)
 
@@ -171,12 +169,10 @@ def main(args, input_infos, device):
             prompt = args.prompt_template.replace('[CLS]', clsname)
         else:
             prompt = args.prompt
-        text_input = tokenizer(prompt, max_length=tokenizer.model_max_length, padding="max_length", truncation=True,
-                               return_tensors="pt"
-                               ).to(device)
+
+        text_input = tokenizer(prompt, max_length=tokenizer.model_max_length, padding="max_length", truncation=True, return_tensors="pt").to(device)
         encoder_hidden_states = text_encoder(text_input["input_ids"])[0]
         encoder_hidden_states = encoder_hidden_states.repeat((args.ensemble_size, 1, 1))
-        # print(encoder_hidden_states.shape)
 
         if noise_scheduler.config.prediction_type == "epsilon":
             target = noise
@@ -186,18 +182,9 @@ def main(args, input_infos, device):
             raise ValueError(f"Unknown prediction type {noise_scheduler.config.prediction_type}")
 
         model_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
-        # loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
         loss = F.mse_loss(model_pred.float(), target.float(), reduction="none")  # bs * 4 * 32 * 32
         loss = torch.mean(loss, dim=0)  # 1 * 4 * 32 * 32
-        # print(loss.shape)
         torch.save(loss.squeeze(0).cpu(), save_path)
-
-        # noise_save_path = opj(args.output_path, 'noisze_' + filename.split('.')[0] + '.pt')
-        # torch.save(target.squeeze(0).cpu(), noise_save_path)
-
-        # v_target = noise_scheduler.get_velocity(latents, noise, timesteps)
-        # noiseV_save_path = opj(args.output_path, 'noiszeV_' + filename.split('.')[0] + '.pt')
-        # torch.save(v_target.squeeze(0).cpu(), noiseV_save_path)
 
 
 def split_list(lst, n):
@@ -205,39 +192,24 @@ def split_list(lst, n):
 
 
 if __name__ == '__main__':
-    mp.set_start_method('spawn')
-    parser = argparse.ArgumentParser(
-        description='''extract dift from input image, and save it as torch tenosr,
-                    in the shape of [c, h, w].''')
 
-    parser.add_argument('--img_size', nargs='+', type=int, default=[512, 512],
-                        help='''in the order of [width, height], resize input image
-                            to [w, h] before fed into diffusion model, if set to 0, will
-                            stick to the original input size. by default is 768x768.''')
-    parser.add_argument('--pretrained_model_name_or_path', default='stabilityai/stable-diffusion-2-1', type=str,
-                        help='model_id of the diffusion model in huggingface')
-    parser.add_argument('--t', default=280, type=int,
-                        help='time step for diffusion, choose from range [0, 1000]')
-    parser.add_argument('--up_ft_index', default=1, type=int, choices=[0, 1, 2, 3],
-                        help='which upsampling block of U-Net to extract the feature map')
-    parser.add_argument('--use_prompt_template', action='store_true', default=False,
-                        help='use instance-wise prompt')
-    parser.add_argument('--use_full_clsname', action='store_true', default=False,
-                        help='use full wordnet name')
-    parser.add_argument('--prompt_template', default='a photo of a [CLS]', type=str,
-                        help='prompt used in the stable diffusion')
-    parser.add_argument('--prompt', default='', type=str,
-                        help='prompt used in the stable diffusion')
-    parser.add_argument('--ensemble_size', default=8, type=int,
-                        help='number of repeated images in each batch used to get features')
-    parser.add_argument('--input_path', type=str,
-                        help='paths to the input image file')
-    parser.add_argument('--output_path', type=str, default='dift.pt',
-                        help='path to save the outputs features as torch tensor')
-    parser.add_argument('--n-gpus', type=int, default=1,
-                        help='number of gpus')
-    parser.add_argument('--dtype', type=str, default='fp32',
-                        help='paths to the input image file')
+    mp.set_start_method('spawn')
+    parser = argparse.ArgumentParser(description='''extract dift from input image, and save it as torch tensor, in the shape of [c, h, w].''')
+
+    parser.add_argument('--img_size', nargs='+', type=int, default=[512, 512], help='''in the order of [width, height], resize input image to [w, h] before fed into diffusion model, if set to 0, will stick to the original input size. by default is 768x768.''')
+    parser.add_argument('--pretrained_model_name_or_path', default='stabilityai/stable-diffusion-2-1', type=str, help='model_id of the diffusion model in huggingface')
+    parser.add_argument('--t', default=280, type=int, help='time step for diffusion, choose from range [0, 1000]')
+    parser.add_argument('--up_ft_index', default=1, type=int, choices=[0, 1, 2, 3], help='which upsampling block of U-Net to extract the feature map')
+    parser.add_argument('--use_prompt_template', action='store_true', default=False, help='use instance-wise prompt')
+    parser.add_argument('--use_full_clsname', action='store_true', default=False, help='use full wordnet name')
+    parser.add_argument('--prompt_template', default='a photo of a [CLS]', type=str, help='prompt used in the stable diffusion')
+    parser.add_argument('--prompt', default='', type=str, help='prompt used in the stable diffusion')
+    parser.add_argument('--ensemble_size', default=8, type=int, help='number of repeated images in each batch used to get features')
+    parser.add_argument('--input_path', type=str, help='paths to the input image file')
+    parser.add_argument('--output_path', type=str, default='dift.pt', help='path to save the outputs features as torch tensor')
+    parser.add_argument('--n-gpus', type=int, default=1, help='number of gpus')
+    parser.add_argument('--dtype', type=str, default='fp32', help='paths to the input image file')
+    parser.add_argument('--dataset_file', type=str, required=True, help='path to the .tar.gz containing all images')
     args = parser.parse_args()
 
     # prepare
@@ -256,6 +228,7 @@ if __name__ == '__main__':
 
     # preprocess anns
     genimage_processor = GenImageProcessor()
+
     out_infos = []
     filtered_infos = []
     for info in tqdm(input_infos):
@@ -264,11 +237,14 @@ if __name__ == '__main__':
             print(f'skip {opj(args.output_path, Path(_image_path).name.split(".")[0] + ".pt")}')
             continue
 
+        print(f'Info: {info}')
+
         image_path, label, filename, clsname = genimage_processor(info, use_full_name=args.use_full_clsname)
         save_path = opj(args.output_path, filename.split('.')[0] + '.pt')
         out_info = '\t'.join([save_path, label]) + '\n'
         out_infos.append(out_info)
         filtered_infos.append(info)
+
     info_save_path = opj(args.output_path, 'ann.txt')
     if os.path.exists(info_save_path):
         with open(info_save_path, "a+") as f:
@@ -281,10 +257,8 @@ if __name__ == '__main__':
     num_gpus = torch.cuda.device_count()
     assert num_gpus == args.n_gpus
     splited_infos = split_list(filtered_infos, num_gpus)
-    # run
 
-    # debug
-    # main(args, splited_infos[0], "cuda:0")
     with mp.Pool(processes=num_gpus) as pool:
         pool.starmap(main, [(args, splited_infos[i], f"cuda:{i}") for i in range(num_gpus)])
+
     print("Done")
