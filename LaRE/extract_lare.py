@@ -200,7 +200,7 @@ def main(args, input_infos, device):
         # v_target = noise_scheduler.get_velocity(latents, noise, timesteps)
         # noiseV_save_path = opj(args.output_path, 'noiszeV_' + filename.split('.')[0] + '.pt')
         # torch.save(v_target.squeeze(0).cpu(), noiseV_save_path)
-    torch.save(lare_map, args.lare_file_path)
+    torch.save(lare_map, opj(args.output_path, args.lare_filename))
 
 
 def split_list(lst, n):
@@ -243,8 +243,8 @@ if __name__ == '__main__':
                         help='paths to the input image file')
     parser.add_argument('--ann_file_path', type=str, default='ann.txt',
                         help='paths to ann file')
-    parser.add_argument('--lare_file_path', type=str, default='lare.pt',
-                        help='path where lare will be saved')
+    parser.add_argument('--lare_filename', type=str, default='lare.pt',
+                        help='lare file name')
     args = parser.parse_args()
 
     # prepare
@@ -272,7 +272,7 @@ if __name__ == '__main__':
             continue
 
         image_path, label, filename, clsname = genimage_processor(info, use_full_name=args.use_full_clsname)
-        save_path = opj(args.output_path, filename.split('.')[0] + '.pt')
+        save_path = opj(args.output_path, args.lare_filename)
         out_info = '\t'.join([save_path, filename, label]) + '\n'
         out_infos.append(out_info)
         filtered_infos.append(info)
