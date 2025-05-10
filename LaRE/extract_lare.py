@@ -113,6 +113,8 @@ def main(args, input_infos, device):
         args.pretrained_model_name_or_path, subfolder="vae", revision=None
     )
 
+    lare_map = {}
+
     if args.dtype == "fp16":
         unet = unet.half()
         text_encoder = text_encoder.half()
@@ -136,12 +138,12 @@ def main(args, input_infos, device):
     genimage_processor = GenImageProcessor()
     for info in tqdm(input_infos):
         image_path, label, filename, clsname = genimage_processor(info, use_full_name=args.use_full_clsname)
-        save_path = opj(args.output_path, filename.split('.')[0] + '.pt')
+        lare_key =  filename.split('.')[0]
         try:
             img = Image.open(image_path).convert('RGB')
         except PIL.UnidentifiedImageError:
             print(f'Bad Image {filename}')
-            torch.save(torch.zeros((4, 32, 32)), save_path)
+            lare_map[lare_key] = torch.zeros((4, 32, 32))
             continue
 
         if args.img_size[0] > 0:
@@ -190,7 +192,7 @@ def main(args, input_infos, device):
         loss = F.mse_loss(model_pred.float(), target.float(), reduction="none")  # bs * 4 * 32 * 32
         loss = torch.mean(loss, dim=0)  # 1 * 4 * 32 * 32
         # print(loss.shape)
-        torch.save(loss.squeeze(0).cpu(), save_path)
+        lare_map[lare_key] = loss.squeeze(0).cpu()
 
         # noise_save_path = opj(args.output_path, 'noisze_' + filename.split('.')[0] + '.pt')
         # torch.save(target.squeeze(0).cpu(), noise_save_path)
@@ -198,6 +200,7 @@ def main(args, input_infos, device):
         # v_target = noise_scheduler.get_velocity(latents, noise, timesteps)
         # noiseV_save_path = opj(args.output_path, 'noiszeV_' + filename.split('.')[0] + '.pt')
         # torch.save(v_target.squeeze(0).cpu(), noiseV_save_path)
+    torch.save(lare_map, args.lare_file_path)
 
 
 def split_list(lst, n):
@@ -238,6 +241,10 @@ if __name__ == '__main__':
                         help='number of gpus')
     parser.add_argument('--dtype', type=str, default='fp32',
                         help='paths to the input image file')
+    parser.add_argument('--ann_file_path', type=str, default='ann.txt',
+                        help='paths to ann file')
+    parser.add_argument('--lare_file_path', type=str, default='lare.pt',
+                        help='path where lare will be saved')
     args = parser.parse_args()
 
     # prepare
@@ -266,10 +273,10 @@ if __name__ == '__main__':
 
         image_path, label, filename, clsname = genimage_processor(info, use_full_name=args.use_full_clsname)
         save_path = opj(args.output_path, filename.split('.')[0] + '.pt')
-        out_info = '\t'.join([save_path, label]) + '\n'
+        out_info = '\t'.join([save_path, filename, label]) + '\n'
         out_infos.append(out_info)
         filtered_infos.append(info)
-    info_save_path = opj(args.output_path, 'ann.txt')
+    info_save_path = args.ann_file_path #opj(args.ann_path, 'ann.txt')
     if os.path.exists(info_save_path):
         with open(info_save_path, "a+") as f:
             # Append new content
