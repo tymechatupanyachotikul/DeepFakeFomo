@@ -273,6 +273,7 @@ if __name__ == '__main__':
 
         image_path, label, filename, clsname = genimage_processor(info, use_full_name=args.use_full_clsname)
         save_path = opj(args.output_path, args.lare_filename)
+        filename = filename.split('.')[0]
         out_info = '\t'.join([save_path, filename, label]) + '\n'
         out_infos.append(out_info)
         filtered_infos.append(info)
