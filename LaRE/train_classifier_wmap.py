@@ -201,7 +201,7 @@ class ImageDataset(Dataset):
     def getitem(self, index, data_list):
         image_path, onehot_label = data_list[index]
         lare_path, filename = self.ordered_map_paths[index]
-        loss_map = torch.load(self.lare_map[lare_path][filename])
+        loss_map = self.lare_map[lare_path][filename]
 
         if not os.path.exists(image_path):
             image_path = os.path.join(self.data_root, image_path)
