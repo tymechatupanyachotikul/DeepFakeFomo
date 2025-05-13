@@ -157,20 +157,26 @@ class ImageDataset(Dataset):
         # print('len train:', len(self.train_list))
         # print('len test:', len(self.test_list))
         filename_to_loss = {}
+        lare_filename = set()
+
         # 构建图像文件名到lare特征的字典
         with open(args.map_file) as f:
             for line in f:
-                image_path, label = line.strip().split('\t')
-                filename = image_path.split('/')[-1].split('.')[0]
-                filename_to_loss[filename] = image_path
+                lare_path, filename, label = line.strip().split('\t')
+                filename_to_loss[filename] = lare_path
+                lare_filename.add(lare_path)
 
         ordered_map_paths = []
         for ann in self.train_list:
             image_path = ann[0]
             filename = image_path.split('/')[-1].split('.')[0]
-            loss_path = filename_to_loss[filename]
-            ordered_map_paths.append(loss_path)
+            lare_path = filename_to_loss[filename]
+            ordered_map_paths.append((lare_path, filename))
         self.ordered_map_paths = ordered_map_paths
+
+        self.lare_map = {}
+        for filename in lare_filename:
+            self.lare_map[filename] = torch.load(filename)
 
     def transform(self, x):
         if self.isVal:
@@ -201,9 +207,9 @@ class ImageDataset(Dataset):
 
     def getitem(self, index, data_list):
         image_path, onehot_label = data_list[index]
-        map_path = self.ordered_map_paths[index]
 
-        loss_map = torch.load(map_path)
+        lare_path, filename = self.ordered_map_paths[index]
+        loss_map = self.lare_map[lare_path][filename]
 
         if not os.path.exists(image_path):
             image_path = os.path.join(self.data_root, image_path)
@@ -272,7 +278,7 @@ def train_one_epoch(data_loader, model, optimizer, cur_epoch, loss_meter, args, 
 def validation_contrastive(model, args, test_file, device, ngpus_per_node):
     logger.info('Start eval')
     model.eval()
-    val_dataset = ImageDataset(args.data_root, test_file, data_size=args.data_size, split_anchor=False)
+    val_dataset = ImageDataset(args.data_root, test_file, data_size=args.data_size, split_anchor=False, args=args)
     if args.distributed:
         val_sampler = torch.utils.data.distributed.DistributedSampler(val_dataset, shuffle=False)  # drop_last=True)
     else:
