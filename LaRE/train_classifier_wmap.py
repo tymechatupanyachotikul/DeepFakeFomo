@@ -115,10 +115,12 @@ class ImageDataset(Dataset):
         self.albu_pre_train_easy = A.Compose([
             A.PadIfNeeded(min_height=self.data_size, min_width=self.data_size, p=1.0),
             A.RandomCrop(height=self.data_size, width=self.data_size, p=1.0),
+            A.ImageCompression(quality_lower=99, quality_upper=100, p=1.0),
         ], p=1.0)
         self.albu_pre_val = A.Compose([
             A.PadIfNeeded(min_height=self.data_size, min_width=self.data_size, p=1.0),
             A.CenterCrop(height=self.data_size, width=self.data_size, p=1.0),
+            A.ImageCompression(quality_lower=99, quality_upper=100, p=1.0),
         ], p=1.0)
         self.imagenet_norm = transforms.Compose([
             transforms.ToPILImage(),
@@ -155,14 +157,19 @@ class ImageDataset(Dataset):
         with open(args.map_file) as f:
             for line in f:
                 lare_path, filename, label = line.strip().split('\t')
+                if '_original' in lare_path:
+                    filename = f'original_{filename}'
                 filename_to_loss[filename] = lare_path
-                lare_filename.add(lare_path)
 
         ordered_map_paths = []
         for ann in self.train_list:
             image_path = ann[0]
             filename = image_path.split('/')[-1].split('.')[0]
+            if 'ai_og' in image_path:
+                filename = f'original_{filename}'
+
             lare_path = filename_to_loss[filename]
+            lare_filename.add(lare_path)
             ordered_map_paths.append((lare_path, filename))
         self.ordered_map_paths = ordered_map_paths
 
@@ -201,6 +208,10 @@ class ImageDataset(Dataset):
     def getitem(self, index, data_list):
         image_path, onehot_label = data_list[index]
         lare_path, filename = self.ordered_map_paths[index]
+
+        if 'original' in filename:
+            filename = '_'.join(filename.split('_')[1:])
+
         loss_map = self.lare_map[lare_path][filename]
 
         if not os.path.exists(image_path):
@@ -497,14 +508,14 @@ def main(gpu, ngpus_per_node, args):
 
     if args.test_file == '':
         test_file_list = [
-            ('/home/scur0551/LASTED/annotation/val_Midjourney.txt', 'Midjourney'),
+            ('/home/scur0551/LASTED/annotation/val_Midjourney_original.txt', 'Midjourney'),
             #('annotation/val_stable_diffusion_v_1_4_num12000.txt', 'StableDiffusionV1.4'),
-            ('/home/scur0551/LASTED/annotation/val_stable_diffusion_v_1_5.txt', 'StableDiffusionV1.5'),
-            ('/home/scur0551/LASTED/annotation/val_ADM.txt', 'ADM'),
+            ('/home/scur0551/LASTED/annotation/val_stable_diffusion_v_1_5_original.txt', 'StableDiffusionV1.5'),
+            ('/home/scur0551/LASTED/annotation/val_ADM_original.txt', 'ADM'),
             #('annotation/val_glide_num12000.txt', 'GLIDE'),
             #('/home/scur0551/LASTED/annotation/val_Midjourney.txt', 'WuKong'),
-            #('annotation/val_VQDM_num12000.txt', 'VQDM'),
-            ('/home/scur0551/LASTED/annotation/val_BigGAN.txt', 'Biggan'),
+            ('/home/scur0551/LASTED/annotation/val_VQDM_original.txt', 'VQDM'),
+            ('/home/scur0551/LASTED/annotation/val_BigGAN_original.txt', 'Biggan'),
         ]
     elif args.test_file == 'robust':
         test_file_list = [
@@ -682,7 +693,7 @@ class WandbWriter:
             self.step_count[tag] += 1
             step = self.step_count[tag]
         
-        wandb.log({tag: value}, step=step)
+        wandb.log({tag: value})
 
 if __name__ == '__main__':
     conf = argparse.ArgumentParser()

@@ -65,14 +65,20 @@ class GenImageProcessor:
         image_path, label = info.strip().split(' ')
         filename = Path(image_path).name
         folder_or_index = filename.split('_')[0]
+        if folder_or_index == 'r':
+            folder_or_index = filename.split('_')[1]
 
         try:
             if len(folder_or_index) <= 3:  # is a index
                 index = str(int(folder_or_index))
                 clsname_full = self.label_map_idx_to_clsname[index]
             elif folder_or_index == 'ILSVRC2012':  # is val image:
-                folder = self.filename_to_folder[filename]
-                clsname_full = self.label_map_folder_to_clsname[folder]
+                folder = self.filename_to_folder.get(filename, False)
+                if folder:
+                    clsname_full = self.label_map_folder_to_clsname[folder]
+                else:
+                    folder = self.filename_to_folder['_'.join(filename.split('_')[1:])]
+                    clsname_full = self.label_map_folder_to_clsname[folder]
             elif folder_or_index == 'GLIDE':
                 index = str(int(filename.split('_')[4]))
                 clsname_full = self.label_map_idx_to_clsname[index]

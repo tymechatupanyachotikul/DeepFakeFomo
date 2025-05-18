@@ -6,9 +6,16 @@ from tqdm import tqdm
 data_root = 'GenImage/'
 save_path = 'annotation/'
 
-def FileList_Generation(dataset_name, split, reconstructed, reconstruct_only):
+def FileList_Generation(dataset_name, split, reconstructed, reconstruct_only, original_dataset, fake_only):
     # Update your data path below
-    if reconstruct_only:
+
+    if original_dataset:
+        if fake_only:
+            data_name_list = [(f'{dataset_name}/{split}/ai_og', 1)]
+        else:
+            data_name_list = [(f'{dataset_name}/{split}/ai_og', 1), (f'{dataset_name}/{split}/nature', 0)]
+
+    elif reconstruct_only:
         data_name_list = [
             (f'{dataset_name}/{split}/nature_reconstruct', 1)
         ]
@@ -42,7 +49,13 @@ def FileList_Generation(dataset_name, split, reconstructed, reconstruct_only):
     img_list = img_list + img_list2
 
     print('#Images: %d' % len(img_list))
-    if reconstruct_only:
+
+    if original_dataset:
+        if fake_only:
+            textfile = open(f'{save_path}{split}_{dataset_name}_original_fake.txt', 'w')
+        else:
+            textfile = open(f'{save_path}{split}_{dataset_name}_original.txt', 'w')
+    elif reconstruct_only:
         textfile = open(f'{save_path}{split}_{dataset_name}_reconstruct_only.txt', 'w')
     else:
         textfile = open(f'{save_path}{split}_{dataset_name}{"_reconstructed" if reconstructed else ""}.txt', 'w')
@@ -64,7 +77,11 @@ if __name__ == '__main__':
                         help='use reconstructed dataset as fake images')
     parser.add_argument('--reconstruct_only', default=False, type=str,
                         help='extract only reconstructed images')
+    parser.add_argument('--fake_only', default=False, type=bool,
+                        help='extract only fake images')
+    parser.add_argument('--original_dataset', default=False, type=bool,
+                        help='extract only original dataset')
 
     args = parser.parse_args()
 
-    FileList_Generation(args.dataset_name, args.split, args.reconstructed, args.reconstruct_only)
+    FileList_Generation(args.dataset_name, args.split, args.reconstructed, args.reconstruct_only, args.original_dataset, args.fake_only)

@@ -210,7 +210,7 @@ class ImageDataset(Dataset):
 
         lare_path, filename = self.ordered_map_paths[index]
         loss_map = self.lare_map[lare_path][filename]
-
+        
         if not os.path.exists(image_path):
             image_path = os.path.join(self.data_root, image_path)
         image = cv2.imread(image_path)
@@ -479,14 +479,14 @@ def main(gpu, ngpus_per_node, args):
 
     if args.test_file == '':
         test_file_list = [
-            ('annotation/val_midjourney_12k.txt', 'Midjourney'),
-            ('annotation/val_sdv4_12k.txt', 'StableDiffusionV1.4'),
-            ('annotation/val_sdv5_12k.txt', 'StableDiffusionV1.5'),
-            ('annotation/val_adm_12k.txt', 'ADM'),
-            ('annotation/val_glide_12k.txt', 'GLIDE'),
-            ('annotation/val_wukong_12k.txt', 'WuKong'),
-            ('annotation/val_vqdm_12k.txt', 'VQDM'),
-            ('annotation/val_biggan_12k.txt', 'Biggan'),
+            ('/home/scur0551/LASTED/annotation/val_Midjourney.txt', 'Midjourney'),
+            #('annotation/val_stable_diffusion_v_1_4_num12000.txt', 'StableDiffusionV1.4'),
+            ('/home/scur0551/LASTED/annotation/val_stable_diffusion_v_1_5.txt', 'StableDiffusionV1.5'),
+            ('/home/scur0551/LASTED/annotation/val_ADM.txt', 'ADM'),
+            #('annotation/val_glide_num12000.txt', 'GLIDE'),
+            #('/home/scur0551/LASTED/annotation/val_Midjourney.txt', 'WuKong'),
+            ('/home/scur0551/LASTED/annotation/val_VQDM.txt', 'VQDM'),
+            ('/home/scur0551/LASTED/annotation/val_BigGAN.txt', 'Biggan'),
         ]
     elif args.test_file == 'robust':
         test_file_list = [
