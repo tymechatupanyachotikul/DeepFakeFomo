@@ -562,6 +562,118 @@ class LASTEDWLoss(nn.Module):
             return None, image_feats
 
 
+class CLipClassifierWMapViT(nn.Module):
+    def __init__(self, num_class=2, clip_type="ViT-L/14"):
+        super(CLipClassifierWMapViT, self).__init__()
+        self.clip_model, _ = clip.load(clip_type, device='cpu', jit=False)
+        self.feat_dim = self.clip_model.visual.proj.shape[1]  # 512 for ViT-B/32, 768 for ViT-L/14
+
+        self.fc = nn.Linear(self.feat_dim * 3, num_class)
+
+        # Project loss map channels to match ViT spatial attention
+        self.conv_map = nn.Conv2d(4, 8, kernel_size=1)
+        self.channel_align = ChannelAlignLayer(in_dim=4, mid_dim=128, out_dim=self.feat_dim)
+
+        # Attention pooling adapted to feat_dim
+        self.attn_pool = MultiHeadMapAttention(feat_dim=self.feat_dim, num_heads=8)
+
+    def forward(self, image_input, loss_map):
+        # CLIP's ViT encode_image gives [B, feat_dim]
+        image_feats = self.clip_model.encode_image(image_input)  # [B, feat_dim]
+
+        # Simulate intermediate block3_feats as a spatial map
+        block3_feats = image_feats.unsqueeze(-1).unsqueeze(-1).expand(-1, self.feat_dim, 16, 16)
+
+        spatial_dim = int(block3_feats.size(-1))  # e.g., 16 for ViT-L/14
+        aligned_loss_map = F.adaptive_avg_pool2d(loss_map, (spatial_dim, spatial_dim))  # [B, 4, 16, 16]
+        pooled_loss_map = self.conv_map(aligned_loss_map)             # [B, 8, 16, 16]
+
+        pooled_block3_feats = self.attn_pool(block3_feats, pooled_loss_map)   # [B, feat_dim]
+        channel_weighted_feats = self.channel_align(block3_feats, loss_map)   # [B, feat_dim]
+
+        logits = self.fc(torch.cat([image_feats, pooled_block3_feats, channel_weighted_feats], dim=1))
+        return logits
+
+class CLipClassifierWMapConvNeXt(nn.Module):
+    def __init__(self, num_class=2, clip_type="convnext_large_d"):
+        super(CLipClassifierWMapConvNeXt, self).__init__()
+
+        # Load OpenCLIP ConvNeXt model (e.g., convnext_base, convnext_large)
+        self.clip_model, _, preprocess = open_clip.create_model_and_transforms(
+            model_name=clip_type,
+            pretrained='laion2b_s26b_b102k_augreg',
+            device='cpu'  # or 'cuda' if loading directly to GPU
+        )
+        self.preprocess = preprocess
+        self.feat_dim = 768 #self.clip_model.embed_dim  # e.g., 512 for convnext_base
+
+        # Final classifier
+        self.fc = nn.Linear(self.feat_dim * 3, num_class)
+
+        # Loss-map processing
+        self.conv_map = nn.Conv2d(4, 8, kernel_size=1)
+        self.channel_align = ChannelAlignLayer(in_dim=4, mid_dim=128, out_dim=self.feat_dim)
+        self.attn_pool = MultiHeadMapAttention(feat_dim=self.feat_dim, num_heads=8)
+
+    def forward(self, image_input, loss_map):
+        # Global pooled CLIP features
+        image_feats = self.clip_model.encode_image(image_input)  # [B, feat_dim]
+
+        # Simulate spatial feature map (no intermediate features in OpenCLIP)
+        spatial_size = 14  # can also be 7 or 16 depending on patch resolution
+        block3_feats = image_feats.unsqueeze(-1).unsqueeze(-1).expand(-1, self.feat_dim, spatial_size, spatial_size)
+
+        # Prepare loss map
+        aligned_loss_map = F.adaptive_avg_pool2d(loss_map, (spatial_size, spatial_size))  # [B, 4, H, W]
+        pooled_loss_map = self.conv_map(aligned_loss_map)  # [B, 8, H, W]
+
+        pooled_block3_feats = self.attn_pool(block3_feats, pooled_loss_map)  # [B, feat_dim]
+        channel_weighted_feats = self.channel_align(block3_feats, loss_map)  # [B, feat_dim]
+
+        # Final classifier
+        logits = self.fc(torch.cat([image_feats, pooled_block3_feats, channel_weighted_feats], dim=1))
+        return logits
+
+class MultiHeadMapAttention(nn.Module):
+    def __init__(self, spatial_dim=16, feat_dim=512, num_heads=8):
+        super().__init__()
+        self.num_tokens = spatial_dim * spatial_dim + 1
+        self.positional_embedding = nn.Parameter(torch.randn(self.num_tokens, feat_dim) / feat_dim**0.5)
+        #self.positional_embedding = nn.Parameter(torch.randn(257, feat_dim) / feat_dim**0.5)
+        self.k_proj = nn.Linear(feat_dim, feat_dim)
+        self.q_proj = nn.Linear(feat_dim, feat_dim)
+        self.v_proj = nn.Linear(feat_dim, feat_dim)
+        self.c_proj = nn.Linear(feat_dim, feat_dim)
+        self.num_heads = num_heads
+
+    def forward(self, x, loss_map):
+        B, C, H, W = x.shape  # [B, C, 16, 16]
+        x = x.flatten(start_dim=2).permute(2, 0, 1)  # [HW, B, C]
+        x = torch.cat([x.mean(dim=0, keepdim=True), x], dim=0)  # [HW+1, B, C]
+        x = x + self.positional_embedding[:x.size(0), None, :].to(x.dtype)
+
+        query = x[:1]  # CLS token
+        x, _ = F.multi_head_attention_forward(
+            query=query, key=x, value=x,
+            embed_dim_to_check=C,
+            num_heads=self.num_heads,
+            q_proj_weight=self.q_proj.weight,
+            k_proj_weight=self.k_proj.weight,
+            v_proj_weight=self.v_proj.weight,
+            in_proj_weight=None,
+            in_proj_bias=torch.cat([self.q_proj.bias, self.k_proj.bias, self.v_proj.bias]),
+            bias_k=None,
+            bias_v=None,
+            add_zero_attn=False,
+            dropout_p=0,
+            out_proj_weight=self.c_proj.weight,
+            out_proj_bias=self.c_proj.bias,
+            use_separate_proj_weight=True,
+            training=self.training,
+            need_weights=False
+        )
+        return x.squeeze(0)
+
 if __name__ == '__main__':
     os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
