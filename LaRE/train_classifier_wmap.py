@@ -597,8 +597,8 @@ def main(gpu, ngpus_per_node, args):
                 writer.add_scalar('val/RawACC', val_raw_acc)
                 writer.add_scalar('val/RealACC', val_r_acc)
                 writer.add_scalar('val/FakeACC', val_f_acc)
-                if val_acc > test_best_close:
-                    test_best_close = val_acc
+                if val_raw_acc > test_best_close:
+                    test_best_close = val_raw_acc
                     saved_name = 'Val_best.pth'
                     torch.save(model.state_dict(), os.path.join(args.out_dir, saved_name))
                     logger.info(f'Epoch: {epoch}, Best Val')
