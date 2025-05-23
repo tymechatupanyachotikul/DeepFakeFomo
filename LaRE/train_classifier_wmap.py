@@ -187,14 +187,14 @@ class ImageDataset(Dataset):
                     filename = f'original_{filename}'
                 elif '_new_original' in lare_path:
                     filename = f'new_original_{filename}'
-                elif 'ai_new' in lare_filename:
+                elif 'ai_new' in lare_path:
                     filename = 'ai_new_' + filename
-                elif 'square_sd_xl' in lare_filename:
-                    filename = 'nature_reconstruct_square_sd_xl' + filename
-                elif 'square' in lare_filename:
-                    filename = 'nature_reconstruct_square' + filename
-                elif 'xl' in lare_filename:
-                    filename = 'nature_reconstruct_sd_xl' + filename
+                elif 'square_sd_xl' in lare_path:
+                    filename = 'nature_reconstruct_square_sd_xl_' + filename
+                elif 'square' in lare_path:
+                    filename = 'nature_reconstruct_square_' + filename
+                elif 'xl' in lare_path:
+                    filename = 'nature_reconstruct_sd_xl_' + filename
                 filename_to_loss[filename] = lare_path
 
         ordered_map_paths = []
@@ -204,13 +204,13 @@ class ImageDataset(Dataset):
             if 'ai_og' in image_path:
                 filename = f'original_{filename}'
             elif 'ai_new' in image_path:
-                filename = 'ai_new' + filename
-            elif 'nature_reconstruct_square_sd_xl' in image_path:
-                filename = 'nature_reconstruct_square_sd_xl' + filename
+                filename = 'ai_new_' + filename
+            elif 'nature_reconstruct_square_sd_xl_' in image_path:
+                filename = 'nature_reconstruct_square_sd_xl_' + filename
             elif 'nature_reconstruct_square' in image_path:
-                filename = 'nature_reconstruct_square' + filename
+                filename = 'nature_reconstruct_square_' + filename
             elif 'nature_reconstruct_sd_xl' in image_path:
-                filename = 'nature_reconstruct_sd_xl' + filename
+                filename = 'nature_reconstruct_sd_xl_' + filename
 
             lare_path = filename_to_loss[filename]
             lare_filename.add(lare_path)
@@ -258,8 +258,18 @@ class ImageDataset(Dataset):
         image_path, onehot_label = data_list[index]
         lare_path, filename = self.ordered_map_paths[index]
 
-        if 'original' in filename:
-            filename = '_'.join(filename.split('_')[1:])
+        modified_prefix = [
+            'original_',
+            'ai_new_',
+            'nature_reconstruct_square_sd_xl_',
+            'nature_reconstruct_square_',
+            'nature_reconstruct_sd_xl_'
+        ]
+
+        for prefix in modified_prefix:
+            if prefix in filename:
+                filename = filename.replace(prefix, '')
+                break
 
         loss_map = self.lare_map[lare_path][filename]
 
