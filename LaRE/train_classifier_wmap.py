@@ -33,6 +33,7 @@ import importlib
 from tqdm import tqdm
 from tabulate import tabulate
 
+
 logger.basicConfig(level=logger.INFO,
                    format='%(levelname)s %(asctime)s %(filename)s: %(lineno)d] %(message)s',
                    datefmt='%Y-%m-%d %H:%M:%S')
@@ -42,6 +43,7 @@ test_best_close = -1
 
 
 class AverageMeter(object):
+
     def __init__(self):
         self.val = 0
         self.avg = 0
@@ -61,9 +63,10 @@ class AverageMeter(object):
         self.avg = self.sum / self.count
 
 
-
 class LabelSmoothingLoss(nn.Module):
+
     def __init__(self, classes, smoothing=0.0, dim=-1, weight=None):
+
         """if smoothing == 0, it's one-hot method
            if 0 < smoothing < 1, it's smooth method
         """
@@ -87,12 +90,28 @@ class LabelSmoothingLoss(nn.Module):
             true_dist.scatter_(1, target.data.unsqueeze(1), self.confidence)
         return torch.mean(torch.sum(-true_dist * pred, dim=self.dim))
 
+class CenterCropToMinDim(A.ImageOnlyTransform):
+    def __init__(self, always_apply=False, p=1.0):
+        super().__init__(always_apply, p)
+
+    def apply(self, img, **params):
+        h, w = img.shape[:2]
+        min_dim = min(h, w)
+        top = (h - min_dim) // 2
+        left = (w - min_dim) // 2
+        return img[top:top + min_dim, left:left + min_dim]
+
 
 class ImageDataset(Dataset):
-    def __init__(self, data_root, train_file,
-                 data_size=512, val_ratio=None, split_anchor=True,
-                 args=None
-                 ):
+    def __init__(
+            self, 
+            data_root, 
+            train_file,
+            data_size=512, 
+            val_ratio=None, 
+            split_anchor=True,
+            args=None):
+        
         self.data_root = data_root
         self.data_size = data_size
         self.train_list = []
@@ -113,13 +132,23 @@ class ImageDataset(Dataset):
             A.Flip(p=0.33),
         ], p=1.0)
         self.albu_pre_train_easy = A.Compose([
-            A.PadIfNeeded(min_height=self.data_size, min_width=self.data_size, p=1.0),
-            A.RandomCrop(height=self.data_size, width=self.data_size, p=1.0),
+            CenterCropToMinDim(p=1.0),                           
+            A.Resize(height=256, width=256, p=1.0),           
+            #A.PadIfNeeded(min_height=self.data_size, min_width=self.data_size, p=1.0),
+            A.CenterCrop(height=self.data_size, width=self.data_size, p=1.0),
+            A.ImageCompression(quality_lower=99, quality_upper=100, p=1.0),
+        ], p=1.0)
+        self.albu_pre_train_easy_reconstructed = A.Compose([
+            # A.PadIfNeeded(min_height=self.data_size, min_width=self.data_size, p=1.0),
+            A.CenterCrop(height=self.data_size, width=self.data_size, p=1.0),
             A.ImageCompression(quality_lower=99, quality_upper=100, p=1.0),
         ], p=1.0)
         self.albu_pre_val = A.Compose([
-            A.PadIfNeeded(min_height=self.data_size, min_width=self.data_size, p=1.0),
+            CenterCropToMinDim(p=1.0),                           
+            A.Resize(height=256, width=256, p=1.0),              
             A.CenterCrop(height=self.data_size, width=self.data_size, p=1.0),
+            # A.PadIfNeeded(min_height=self.data_size, min_width=self.data_size, p=1.0),
+            # A.CenterCrop(height=self.data_size, width=self.data_size, p=1.0),
             A.ImageCompression(quality_lower=99, quality_upper=100, p=1.0),
         ], p=1.0)
         self.imagenet_norm = transforms.Compose([
@@ -139,9 +168,7 @@ class ImageDataset(Dataset):
                 self.anchor_list.append((image_path, label))
             else:
                 self.train_list.append((image_path, label))
-                # print('add train')
             line = train_file_buf.readline().strip()
-            # print(line)
 
         if val_ratio is not None:
             np.random.shuffle(self.train_list)
@@ -149,16 +176,25 @@ class ImageDataset(Dataset):
             self.train_list = self.train_list[:-int(len(self.train_list) * val_ratio)]
         else:
             self.test_list = self.train_list
-        # print('len train:', len(self.train_list))
-        # print('len test:', len(self.test_list))
+
         filename_to_loss = {}
         lare_filename = set()
 
         with open(args.map_file) as f:
             for line in f:
                 lare_path, filename, label = line.strip().split('\t')
-                if '_original' in lare_path:
+                if '_original' in lare_path and '_new_original' not in lare_path:
                     filename = f'original_{filename}'
+                elif '_new_original' in lare_path:
+                    filename = f'new_original_{filename}'
+                elif 'ai_new' in lare_filename:
+                    filename = 'ai_new_' + filename
+                elif 'square_sd_xl' in lare_filename:
+                    filename = 'nature_reconstruct_square_sd_xl' + filename
+                elif 'square' in lare_filename:
+                    filename = 'nature_reconstruct_square' + filename
+                elif 'xl' in lare_filename:
+                    filename = 'nature_reconstruct_sd_xl' + filename
                 filename_to_loss[filename] = lare_path
 
         ordered_map_paths = []
@@ -167,6 +203,14 @@ class ImageDataset(Dataset):
             filename = image_path.split('/')[-1].split('.')[0]
             if 'ai_og' in image_path:
                 filename = f'original_{filename}'
+            elif 'ai_new' in image_path:
+                filename = 'ai_new' + filename
+            elif 'nature_reconstruct_square_sd_xl' in image_path:
+                filename = 'nature_reconstruct_square_sd_xl' + filename
+            elif 'nature_reconstruct_square' in image_path:
+                filename = 'nature_reconstruct_square' + filename
+            elif 'nature_reconstruct_sd_xl' in image_path:
+                filename = 'nature_reconstruct_sd_xl' + filename
 
             lare_path = filename_to_loss[filename]
             lare_filename.add(lare_path)
@@ -175,15 +219,20 @@ class ImageDataset(Dataset):
 
         self.lare_map = {}
         for filename in lare_filename:
+            print(f'Lare loaded : {filename}')
             self.lare_map[filename] = torch.load(filename)
 
 
-    def transform(self, x):
+    def transform(self, x, image_path=None): #XXX
         if self.isVal:
             x = self.albu_pre_val(image=x)['image']
         else:
             if self.args.no_strong_aug:
-                x = self.albu_pre_train_easy(image=x)['image']
+                # if self.args.reconstructed:
+                if image_path and 'nature_reconstruct' in image_path:
+                    x = self.albu_pre_train_easy_reconstructed(image=x)['image']  
+                else:
+                    x = self.albu_pre_train_easy(image=x)['image']
             else:
                 x = self.albu_pre_train(image=x)['image']
         x = self.imagenet_norm(x)  # .unsqueeze(0)
@@ -224,7 +273,9 @@ class ImageDataset(Dataset):
             image = np.zeros([512, 512, 3], dtype=np.uint8)
         image = image[..., ::-1]
 
-        crop = self.transform(image)
+        # crop = self.transform(image)
+        crop = self.transform(image, image_path=image_path)
+        
         onehot_label = torch.LongTensor([onehot_label])
         return crop, onehot_label, loss_map
 
@@ -248,9 +299,8 @@ def train_one_epoch(data_loader, model, optimizer, cur_epoch, loss_meter, args, 
     for (images, labels, loss_maps) in data_loader:
         images = images.to(device)
         labels = labels.to(device).flatten().squeeze()
+        
         loss_maps = loss_maps.to(device)
-        # print('=' * 20)
-        # print(images.shape)
         logits = model(images, loss_maps)
         # image-axis loss
         loss_img = args.criterion_ce(logits, labels)
@@ -263,12 +313,14 @@ def train_one_epoch(data_loader, model, optimizer, cur_epoch, loss_meter, args, 
         optimizer.step()
 
         loss_meter.update(loss.item(), images.shape[0])
-        if (not args.multiprocessing_distributed or (args.multiprocessing_distributed
-                                                     and args.rank % ngpus_per_node == 0)) and batch_idx % 50 == 0 and batch_idx > 0:
+
+        if (not args.multiprocessing_distributed or (
+            args.multiprocessing_distributed and args.rank % ngpus_per_node == 0
+            )) and batch_idx % 50 == 0 and batch_idx > 0:
+
             loss_avg = loss_meter.avg
             lr = get_lr(optimizer)
-            logger.info(
-                'Ep %03d, it %03d/%03d, lr: %8.7f, CE: %7.6f' % (cur_epoch, batch_idx, len(data_loader), lr, loss_avg))
+            logger.info('Ep %03d, it %03d/%03d, lr: %8.7f, CE: %7.6f' % (cur_epoch, batch_idx, len(data_loader), lr, loss_avg))
             loss_meter.reset()
 
             writer.add_scalar('train/loss', loss_avg)
@@ -282,26 +334,30 @@ def train_one_epoch(data_loader, model, optimizer, cur_epoch, loss_meter, args, 
 
 
 def validation_contrastive(model, args, test_file, device, ngpus_per_node):
+
     logger.info('Start eval')
+
     model.eval()
     val_dataset = ImageDataset(args.data_root, test_file, data_size=args.data_size, split_anchor=False, args=args)
+
     if args.distributed:
         val_sampler = torch.utils.data.distributed.DistributedSampler(val_dataset, shuffle=False)  # drop_last=True)
     else:
         val_sampler = None
+
     data_loader = DataLoader(
         val_dataset, args.test_batch_size,
         shuffle=False,
         num_workers=args.workers, pin_memory=True, sampler=val_sampler)
     data_loader.dataset.set_val_True()
     data_loader.dataset.set_anchor_False()
-    gt_labels_list, pred_labels_list, prob_labels_list = [], [], []
-    if not args.multiprocessing_distributed or (args.multiprocessing_distributed
-                                                and args.rank % ngpus_per_node == 0):
+
+    gt_labels_list, pred_labels_list, prob_labels_list, pred_scores = [], [], [], []
+
+    if not args.multiprocessing_distributed or (
+        args.multiprocessing_distributed and args.rank % ngpus_per_node == 0):
         logger.info(f'Val dataset size: {len(data_loader.dataset)}')
-    gt_labels_list = []
-    pred_scores = []
-    # i = 0
+
     with torch.no_grad():
         for iter, (images, labels, loss_maps) in enumerate(data_loader):
             images = images.to(device)
@@ -309,6 +365,7 @@ def validation_contrastive(model, args, test_file, device, ngpus_per_node):
             images = images.reshape(b, C, H, W)
             labels = labels.flatten().squeeze().to(device)
             loss_maps = loss_maps.to(device)
+
             try:
                 with torch.no_grad():
                     logits = model(images, loss_maps)
@@ -316,14 +373,15 @@ def validation_contrastive(model, args, test_file, device, ngpus_per_node):
             except:  # skip last batch
                 logger.info('Bad eval')
                 raise
-                # continue
+
             gt_labels_list.append(labels)
             prob_labels_list.append(prob[:, 1])
-            if (not args.multiprocessing_distributed or (args.multiprocessing_distributed
-                                                         and args.rank % ngpus_per_node == 0)) and iter % 50 == 0 and iter > 0:
-                logger.info(
-                    'Eval: it %03d/%03d' % (
-                        iter, len(data_loader)))
+
+            if (not args.multiprocessing_distributed or (
+                args.multiprocessing_distributed and args.rank % ngpus_per_node == 0
+                )) and iter % 50 == 0 and iter > 0:
+
+                logger.info('Eval: it %03d/%03d' % (iter, len(data_loader)))
 
     gt_labels = torch.cat(gt_labels_list, dim=0)
     prob_labels = torch.cat(prob_labels_list, dim=0)
@@ -342,19 +400,20 @@ def validation_contrastive(model, args, test_file, device, ngpus_per_node):
     else:
         gt_labels_list = gt_labels.cpu().numpy()
         prob_labels_list = prob_labels.cpu().numpy()
-    print(gt_labels_list.shape)
-    print(prob_labels_list.shape)
+
     fpr, tpr, thres = roc_curve(gt_labels_list, prob_labels_list)
     thresh = thres[len(thres) // 2]
-    if not args.multiprocessing_distributed or (args.multiprocessing_distributed
-                                                and args.rank % ngpus_per_node == 0):
+
+    if not args.multiprocessing_distributed or (
+        args.multiprocessing_distributed and args.rank % ngpus_per_node == 0):
         logger.info(f'thresh old: {thresh}')
+
     precision, recall, thresholds = precision_recall_curve(gt_labels_list, prob_labels_list)
     f_score = precision * recall / (precision + recall)
     thresh = thresholds[np.argmax(f_score)]
-    # thresh = 0.5
-    if not args.multiprocessing_distributed or (args.multiprocessing_distributed
-                                                and args.rank % ngpus_per_node == 0):
+
+    if not args.multiprocessing_distributed or (
+        args.multiprocessing_distributed and args.rank % ngpus_per_node == 0):
         logger.info(f'thresh new: {thresh}')
 
     pred_labels_list = np.array(prob_labels_list)
@@ -364,19 +423,19 @@ def validation_contrastive(model, args, test_file, device, ngpus_per_node):
     auc = roc_auc_score(gt_labels_list, prob_labels_list)
     accuracy = accuracy_score(gt_labels_list, pred_labels_list)
     ap = average_precision_score(gt_labels_list, prob_labels_list)
+
     model.train()
 
     best_acc, best_thresh = search_best_acc(gt_labels_list, prob_labels_list)
-    if not args.multiprocessing_distributed or (args.multiprocessing_distributed
-                                                and args.rank % ngpus_per_node == 0):
+
+    if not args.multiprocessing_distributed or (
+        args.multiprocessing_distributed and args.rank % ngpus_per_node == 0):
         logger.info(f'Search ACC: {best_acc}, Search Thresh: {best_thresh}')
         logger.info(f'GT: Num positive : {gt_labels_list[gt_labels_list == 0].shape[0]}, '
-                    f'Num negative : {gt_labels_list[gt_labels_list == 1].shape[0]}'
-        )
+                    f'Num negative : {gt_labels_list[gt_labels_list == 1].shape[0]}')
         logger.info(
             f'Pred: Num positive : {prob_labels_list[prob_labels_list < 0.5].shape[0]}, '
-            f'Num negative : {prob_labels_list[prob_labels_list > 0.5].shape[0]}'
-        )
+            f'Num negative : {prob_labels_list[prob_labels_list > 0.5].shape[0]}')
 
     r_acc = accuracy_score(gt_labels_list[gt_labels_list == 0], prob_labels_list[gt_labels_list == 0] > 0.5)
     f_acc = accuracy_score(gt_labels_list[gt_labels_list == 1], prob_labels_list[gt_labels_list == 1] > 0.5)
@@ -404,8 +463,8 @@ def main(gpu, ngpus_per_node, args):
     global test_best
     global test_best_close
 
-    if not args.multiprocessing_distributed or (args.multiprocessing_distributed
-                                                and args.rank % ngpus_per_node == 0):
+    if not args.multiprocessing_distributed or (
+        args.multiprocessing_distributed and args.rank % ngpus_per_node == 0):
         wandb_run = wandb.init(
             project=args.wandb_project,
             entity=args.wandb_entity,
@@ -696,15 +755,12 @@ class WandbWriter:
         wandb.log({tag: value})
 
 if __name__ == '__main__':
+
     conf = argparse.ArgumentParser()
-    conf.add_argument("--data_root", type=str, default='data/',
-                      help="The root folder of training set.")
-    conf.add_argument("--train_file", type=str,
-                      default='annotation/Train_num398700.txt')
-    conf.add_argument("--val_file", type=str,
-                      default='annotation/Test_MidjourneyV5_num2000.txt')
-    conf.add_argument("--test_file", type=str,
-                      default='annotation/Test_MidjourneyV5_num2000.txt')
+    conf.add_argument("--data_root", type=str, default='data/', help="The root folder of training set.")
+    conf.add_argument("--train_file", type=str, default='annotation/Train_num398700.txt')
+    conf.add_argument("--val_file", type=str, default='annotation/Test_MidjourneyV5_num2000.txt')
+    conf.add_argument("--test_file", type=str, default='annotation/Test_MidjourneyV5_num2000.txt')
     conf.add_argument('--val_ratio', type=float, default=0.005)
     conf.add_argument('--isTrain', type=int, default=1)
     conf.add_argument("--model", type=str, default='LASTED')
@@ -715,7 +771,6 @@ if __name__ == '__main__':
     conf.add_argument('--batch_size', type=int, default=48, help='The training batch size over all gpus.')
     conf.add_argument('--test_batch_size', type=int, default=48, help='The training batch size over all gpus.')
     conf.add_argument('--data_size', type=int, default=448, help='The image size for training.')
-    # conf.add_argument('--gpu', type=str, default='0,1,2,3', help='The gpu')
     conf.add_argument("--resume", type=str, default='')
     conf.add_argument("--out_dir", type=str, default='')
     conf.add_argument("--break_onek", action='store_true', default=False)
@@ -732,23 +787,17 @@ if __name__ == '__main__':
                            'N processes per node, which has N GPUs. This is the '
                            'fastest way to use PyTorch for either single node or '
                            'multi node data parallel training')
-    conf.add_argument('--dist-url', default='tcp://224.66.41.62:23456', type=str,
-                      help='url used to set up distributed training')
-    conf.add_argument('--dist-backend', default='nccl', type=str,
-                      help='distributed backend')
-    conf.add_argument('--world-size', default=-1, type=int,
-                      help='number of nodes for distributed training')
-    conf.add_argument('--rank', default=-1, type=int,
-                      help='node rank for distributed training')
-    conf.add_argument('-j', '--workers', default=48, type=int, metavar='N',
-                      help='number of data loading workers (default: 4)')
-    conf.add_argument("--wandb_project", type=str, default="LaRE", 
-                      help="Weights & Biases project name")
-    conf.add_argument("--wandb_entity", type=str, default="deep-fake-uva", 
-                      help="Weights & Biases entity name (username or team name)")
+    conf.add_argument('--dist-url', default='tcp://224.66.41.62:23456', type=str, help='url used to set up distributed training')
+    conf.add_argument('--dist-backend', default='nccl', type=str, help='distributed backend')
+    conf.add_argument('--world-size', default=-1, type=int, help='number of nodes for distributed training')
+    conf.add_argument('--rank', default=-1, type=int, help='node rank for distributed training')
+    conf.add_argument('-j', '--workers', default=48, type=int, metavar='N', help='number of data loading workers (default: 4)')
+    conf.add_argument("--wandb_project", type=str, default="LaRE",  help="Weights & Biases project name")
+    conf.add_argument("--wandb_entity", type=str, default="deep-fake-uva",  help="Weights & Biases entity name (username or team name)")
     conf.add_argument('--map_file', type=str, default='')
+    # conf.add_argument('--reconstructed', action='store_true', default=False, help='Use this flag if dataset is reconstructed')
+
     args = conf.parse_args()
-    # os.environ['NUMEXPR_MAX_THREADS'] = str(min(os.cpu_count(), os.cpu_count()))
 
     logger.info(args)
 
@@ -761,8 +810,7 @@ if __name__ == '__main__':
     if args.isTrain == 1:
         logger.info('Train Mode')
         date_now = datetime.datetime.now()
-        date_now = 'Exp' + args.exp_name + '_Log_v%02d%02d%02d%02d' % (
-            date_now.month, date_now.day, date_now.hour, date_now.minute)
+        date_now = 'Exp' + args.exp_name + '_Log_v%02d%02d%02d%02d' % (date_now.month, date_now.day, date_now.hour, date_now.minute)
         args.time = date_now
         args.out_dir = os.path.join(args.out_dir, args.time)
         if os.path.exists(args.out_dir):
