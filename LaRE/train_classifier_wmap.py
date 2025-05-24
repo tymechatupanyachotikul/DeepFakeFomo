@@ -1,42 +1,42 @@
-import json
 import os
 import cv2
 import time
+import json
+import wandb
 import shutil
 import random
 import datetime
 import argparse
-import numpy as np
 import warnings
+import importlib
+import numpy as np
+from tqdm import tqdm
 import logging as logger
-import wandb
+from tabulate import tabulate
+from datetime import timedelta
 
 import torch
 from torch import nn
 from torch import optim
-from torch.utils.data import DataLoader
-from torch.nn import functional as F
 import torch.distributed as dist
-from torch.utils.data import Dataset
-from torchvision import transforms
-import torch.backends.cudnn as cudnn
-import torch.utils.data.distributed
 import torch.multiprocessing as mp
+from torchvision import transforms
+import torch.utils.data.distributed
+from torch.utils.data import Dataset
+import torch.backends.cudnn as cudnn
+from torch.nn import functional as F
+from torch.utils.data import DataLoader
 from torch.nn.utils import clip_grad_norm_
 
 import albumentations as A
-from sklearn.metrics import accuracy_score, roc_auc_score, roc_curve, average_precision_score
-from sklearn.metrics import precision_recall_curve
-import importlib
-# from torch_kmeans import KMeans as torchKMeans
-# from torch_kmeans.utils.distances import CosineSimilarity
-from tqdm import tqdm
-from tabulate import tabulate
+from sklearn.metrics import precision_recall_curve, accuracy_score, roc_auc_score, roc_curve, average_precision_score
 
 
-logger.basicConfig(level=logger.INFO,
-                   format='%(levelname)s %(asctime)s %(filename)s: %(lineno)d] %(message)s',
-                   datefmt='%Y-%m-%d %H:%M:%S')
+logger.basicConfig(
+    level=logger.INFO,
+    format='%(levelname)s %(asctime)s %(filename)s: %(lineno)d] %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
 
 test_best = -1
 test_best_close = -1
@@ -90,6 +90,7 @@ class LabelSmoothingLoss(nn.Module):
             true_dist.scatter_(1, target.data.unsqueeze(1), self.confidence)
         return torch.mean(torch.sum(-true_dist * pred, dim=self.dim))
 
+
 class CenterCropToMinDim(A.ImageOnlyTransform):
     def __init__(self, always_apply=False, p=1.0):
         super().__init__(always_apply, p)
@@ -119,11 +120,12 @@ class ImageDataset(Dataset):
         self.isAnchor = False
         self.isVal = False
         self.split_anchor = split_anchor
+        self.args = args
         self.albu_pre_train = A.Compose([
             A.PadIfNeeded(min_height=self.data_size, min_width=self.data_size, p=1.0),
             A.RandomCrop(height=self.data_size, width=self.data_size, p=1.0),
             A.OneOf([
-                A.ImageCompression(quality_lower=50, quality_upper=95, compression_type=0, p=1.0),
+                A.ImageCompression(quality_lower=70, quality_upper=100, p=1.0),
                 A.GaussianBlur(blur_limit=(3, 7), p=1.0),
                 A.GaussNoise(var_limit=(3.0, 10.0), p=1.0),
                 A.ToGray(p=1.0),
@@ -132,32 +134,34 @@ class ImageDataset(Dataset):
             A.Flip(p=0.33),
         ], p=1.0)
         self.albu_pre_train_easy = A.Compose([
-            CenterCropToMinDim(p=1.0),                           
-            A.Resize(height=256, width=256, p=1.0),           
-            #A.PadIfNeeded(min_height=self.data_size, min_width=self.data_size, p=1.0),
-            A.CenterCrop(height=self.data_size, width=self.data_size, p=1.0),
-            A.ImageCompression(quality_lower=99, quality_upper=100, p=1.0),
+            #CenterCropToMinDim(p=1.0),                           
+            #A.Resize(height=256, width=256, p=1.0),           
+            A.PadIfNeeded(min_height=self.data_size, min_width=self.data_size, p=1.0),
+            #A.CenterCrop(height=self.data_size, width=self.data_size, p=1.0),
+            A.RandomCrop(height=self.data_size, width=self.data_size, p=1.0),
+            #A.ImageCompression(quality_lower=99, quality_upper=100, p=1.0),
         ], p=1.0)
         self.albu_pre_train_easy_reconstructed = A.Compose([
-            # A.PadIfNeeded(min_height=self.data_size, min_width=self.data_size, p=1.0),
-            A.CenterCrop(height=self.data_size, width=self.data_size, p=1.0),
-            A.ImageCompression(quality_lower=99, quality_upper=100, p=1.0),
+            A.PadIfNeeded(min_height=self.data_size, min_width=self.data_size, p=1.0),
+            #A.CenterCrop(height=self.data_size, width=self.data_size, p=1.0),
+            A.RandomCrop(height=self.data_size, width=self.data_size, p=1.0),
+            #A.ImageCompression(quality_lower=99, quality_upper=100, p=1.0),
         ], p=1.0)
         self.albu_pre_val = A.Compose([
-            CenterCropToMinDim(p=1.0),                           
-            A.Resize(height=256, width=256, p=1.0),              
-            A.CenterCrop(height=self.data_size, width=self.data_size, p=1.0),
-            # A.PadIfNeeded(min_height=self.data_size, min_width=self.data_size, p=1.0),
-            # A.CenterCrop(height=self.data_size, width=self.data_size, p=1.0),
-            A.ImageCompression(quality_lower=99, quality_upper=100, p=1.0),
+            #CenterCropToMinDim(p=1.0),                           
+            #A.Resize(height=256, width=256, p=1.0),              
+            #A.CenterCrop(height=self.data_size, width=self.data_size, p=1.0),
+            A.PadIfNeeded(min_height=self.data_size, min_width=self.data_size, p=1.0),
+            A.RandomCrop(height=self.data_size, width=self.data_size, p=1.0),
+            #A.CenterCrop(height=self.data_size, width=self.data_size, p=1.0),
+            #A.ImageCompression(quality_lower=99, quality_upper=100, p=1.0),
         ], p=1.0)
         self.imagenet_norm = transforms.Compose([
             transforms.ToPILImage(),
             transforms.ToTensor(),
             transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
         ])
-        self.args = args
-
+        
         train_file_buf = open(train_file)
         line = train_file_buf.readline().strip()
 
@@ -303,9 +307,11 @@ class ImageDataset(Dataset):
 
 
 def train_one_epoch(data_loader, model, optimizer, cur_epoch, loss_meter, args, device, writer, ngpus_per_node):
+    
     loss_meter.reset()
     batch_idx = 0
     loss_avg = 0
+    
     for (images, labels, loss_maps) in data_loader:
         images = images.to(device)
         labels = labels.to(device).flatten().squeeze()
@@ -348,7 +354,13 @@ def validation_contrastive(model, args, test_file, device, ngpus_per_node):
     logger.info('Start eval')
 
     model.eval()
-    val_dataset = ImageDataset(args.data_root, test_file, data_size=args.data_size, split_anchor=False, args=args)
+    val_dataset = ImageDataset(
+        args.data_root, 
+        test_file, 
+        data_size=args.data_size, 
+        split_anchor=False, 
+        args=args
+    )
 
     if args.distributed:
         val_sampler = torch.utils.data.distributed.DistributedSampler(val_dataset, shuffle=False)  # drop_last=True)
@@ -356,9 +368,14 @@ def validation_contrastive(model, args, test_file, device, ngpus_per_node):
         val_sampler = None
 
     data_loader = DataLoader(
-        val_dataset, args.test_batch_size,
+        val_dataset, 
+        args.test_batch_size,
         shuffle=False,
-        num_workers=args.workers, pin_memory=True, sampler=val_sampler)
+        num_workers=args.workers, 
+        pin_memory=True, 
+        sampler=val_sampler
+    )
+
     data_loader.dataset.set_val_True()
     data_loader.dataset.set_anchor_False()
 
@@ -369,6 +386,7 @@ def validation_contrastive(model, args, test_file, device, ngpus_per_node):
         logger.info(f'Val dataset size: {len(data_loader.dataset)}')
 
     with torch.no_grad():
+
         for iter, (images, labels, loss_maps) in enumerate(data_loader):
             images = images.to(device)
             b, C, H, W = images.shape
@@ -388,15 +406,15 @@ def validation_contrastive(model, args, test_file, device, ngpus_per_node):
             prob_labels_list.append(prob[:, 1])
 
             if (not args.multiprocessing_distributed or (
-                args.multiprocessing_distributed and args.rank % ngpus_per_node == 0
-                )) and iter % 50 == 0 and iter > 0:
-
+                args.multiprocessing_distributed and args.rank % ngpus_per_node == 0)
+                ) and iter % 50 == 0 and iter > 0:
                 logger.info('Eval: it %03d/%03d' % (iter, len(data_loader)))
 
     gt_labels = torch.cat(gt_labels_list, dim=0)
     prob_labels = torch.cat(prob_labels_list, dim=0)
 
     if args.multiprocessing_distributed:
+
         gt_labels_output_tensor = torch.zeros((len(val_dataset),), dtype=gt_labels.dtype).to(device)
         prob_labels_output_tensor = torch.zeros((len(val_dataset),), dtype=prob_labels.dtype).to(device)
         gt_labels_gathered_tensor_list = list(torch.split(gt_labels_output_tensor, len(val_dataset) // 8))
@@ -441,22 +459,26 @@ def validation_contrastive(model, args, test_file, device, ngpus_per_node):
     if not args.multiprocessing_distributed or (
         args.multiprocessing_distributed and args.rank % ngpus_per_node == 0):
         logger.info(f'Search ACC: {best_acc}, Search Thresh: {best_thresh}')
-        logger.info(f'GT: Num positive : {gt_labels_list[gt_labels_list == 0].shape[0]}, '
-                    f'Num negative : {gt_labels_list[gt_labels_list == 1].shape[0]}')
-        logger.info(
-            f'Pred: Num positive : {prob_labels_list[prob_labels_list < 0.5].shape[0]}, '
-            f'Num negative : {prob_labels_list[prob_labels_list > 0.5].shape[0]}')
+        logger.info(f'GT: Num positive : {gt_labels_list[gt_labels_list == 0].shape[0]}, 'f'Num negative : {gt_labels_list[gt_labels_list == 1].shape[0]}')
+        logger.info(f'Pred: Num positive : {prob_labels_list[prob_labels_list < 0.5].shape[0]}, 'f'Num negative : {prob_labels_list[prob_labels_list > 0.5].shape[0]}')
 
     r_acc = accuracy_score(gt_labels_list[gt_labels_list == 0], prob_labels_list[gt_labels_list == 0] > 0.5)
     f_acc = accuracy_score(gt_labels_list[gt_labels_list == 1], prob_labels_list[gt_labels_list == 1] > 0.5)
     raw_acc = accuracy_score(gt_labels_list, prob_labels_list > 0.5)
+    
     return auc, best_acc, ap, raw_acc, r_acc, f_acc
 
 
+def get_lr(optimizer):
+    for param_group in optimizer.param_groups:
+        return param_group['lr']
+
+
 def search_best_acc(gt_labels, pred_probs):
-    best_acc = -1
-    best_threshold = -1
+
     acc_dict = {}
+    best_acc, best_threshold = -1, -1
+
     for thresh in sorted(pred_probs.tolist()):
         pred_probs_copy = np.array(pred_probs)
         pred_probs_copy[pred_probs_copy > thresh] = 1
@@ -466,10 +488,12 @@ def search_best_acc(gt_labels, pred_probs):
         if acc > best_acc:
             best_acc = acc
             best_threshold = thresh
+
     return best_acc, best_threshold
 
 
 def main(gpu, ngpus_per_node, args):
+
     global test_best
     global test_best_close
 
@@ -484,10 +508,7 @@ def main(gpu, ngpus_per_node, args):
         )
         wandb.log({"run_type": "training"})
         writer = WandbWriter(wandb_run)
-    else:
-        if not args.multiprocessing_distributed or (args.multiprocessing_distributed
-                                                    and args.rank % ngpus_per_node == 0):
-            writer = FakeWriter()
+
     args.gpu = gpu
     if args.gpu is not None:
         logger.info("Use GPU: {} for training".format(args.gpu))
@@ -499,14 +520,19 @@ def main(gpu, ngpus_per_node, args):
             # For multiprocessing distributed training, rank needs to be the
             # global rank among all the processes
             args.rank = args.rank * ngpus_per_node + gpu
-        dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url,
-                                world_size=args.world_size, rank=args.rank)
+        dist.init_process_group(
+            backend=args.dist_backend, 
+            init_method=args.dist_url,
+            world_size=args.world_size, 
+            rank=args.rank,
+            timeout=timedelta(seconds=10)
+        )
 
     model = getattr(importlib.import_module('model'), args.model)(num_class=args.num_class, clip_type=args.clip_type)
-    # model = torch.nn.DataParallel(model).cuda()
 
     if not torch.cuda.is_available() and not torch.backends.mps.is_available():
         print('using CPU, this will be slow')
+
     elif args.distributed:
         # For multiprocessing distributed, DistributedDataParallel constructor
         # should always set the single device scope, otherwise,
@@ -521,12 +547,14 @@ def main(gpu, ngpus_per_node, args):
                 args.batch_size = int(args.batch_size / ngpus_per_node)
                 args.test_batch_size = int(args.test_batch_size / ngpus_per_node)
                 args.workers = int((args.workers + ngpus_per_node - 1) / ngpus_per_node)
-                if not args.multiprocessing_distributed or (args.multiprocessing_distributed
-                                                            and args.rank % ngpus_per_node == 0):
-                    logger.info(
-                        f'Batch size={args.batch_size}, ngpus_per_node={ngpus_per_node}, workers={args.workers}')
-                model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu],
-                                                                  find_unused_parameters=True)
+                if not args.multiprocessing_distributed or (
+                    args.multiprocessing_distributed and args.rank % ngpus_per_node == 0):
+                    logger.info(f'Batch size={args.batch_size}, ngpus_per_node={ngpus_per_node}, workers={args.workers}')
+                model = torch.nn.parallel.DistributedDataParallel(
+                    model, 
+                    device_ids=[args.gpu],
+                    find_unused_parameters=True
+                )
             else:
                 model.cuda()
                 # DistributedDataParallel will divide and allocate batch_size to all
@@ -557,23 +585,31 @@ def main(gpu, ngpus_per_node, args):
         device = torch.device("cpu")
 
     # load data
-    train_dataset = ImageDataset(args.data_root, args.train_file, data_size=args.data_size, val_ratio=None,
-                                 split_anchor=False, args=args)
-    if not args.multiprocessing_distributed or (args.multiprocessing_distributed
-                                                and args.rank % ngpus_per_node == 0):
+    train_dataset = ImageDataset(
+        args.data_root, 
+        args.train_file, 
+        data_size=args.data_size, 
+        val_ratio=None,
+        split_anchor=False, 
+        args=args
+    )
+    if not args.multiprocessing_distributed or (
+        args.multiprocessing_distributed and args.rank % ngpus_per_node == 0):
         logger.info(f'Train dataset size: {len(train_dataset)}')
-    # train_data_loader = DataLoader(train_dataset,
-    #                                args.batch_size, shuffle=True, num_workers=min(48, args.batch_size), drop_last=True)
+
     if args.distributed:
         train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset)
-        # val_sampler = torch.utils.data.distributed.DistributedSampler(val_dataset, shuffle=False, drop_last=True)
     else:
         train_sampler = None
-        # val_sampler = None
 
     train_data_loader = torch.utils.data.DataLoader(
-        train_dataset, batch_size=args.batch_size, shuffle=(train_sampler is None),
-        num_workers=args.workers, pin_memory=True, sampler=train_sampler)
+        train_dataset, 
+        batch_size=args.batch_size, 
+        shuffle=(train_sampler is None),
+        num_workers=args.workers, 
+        pin_memory=True, 
+        sampler=train_sampler
+    )
 
     if args.test_file == '':
         test_file_list = [
@@ -586,31 +622,27 @@ def main(gpu, ngpus_per_node, args):
             ('/home/scur0551/LASTED/annotation/val_VQDM_original.txt', 'VQDM'),
             ('/home/scur0551/LASTED/annotation/val_BigGAN_original.txt', 'Biggan'),
         ]
-    elif args.test_file == 'robust':
+    elif args.test_file == 'ai_new':
         test_file_list = [
-            ('/home/petterluo/project/FakeImageDetection/outputs/robust_test/anns/midjourney_jpg1_ann.txt', 'Midjourney'),
-            ('/home/petterluo/project/FakeImageDetection/outputs/robust_test/anns/sdv4_jpg1_ann.txt', 'StableDiffusionV1.4'),
-            ('/home/petterluo/project/FakeImageDetection/outputs/robust_test/anns/sdv5_jpg1_ann.txt', 'StableDiffusionV1.5'),
-            ('/home/petterluo/project/FakeImageDetection/outputs/robust_test/anns/adm_jpg1_ann.txt', 'ADM'),
-            ('/home/petterluo/project/FakeImageDetection/outputs/robust_test/anns/glide_jpg1_ann.txt', 'GLIDE'),
-            ('/home/petterluo/project/FakeImageDetection/outputs/robust_test/anns/wukong_jpg1_ann.txt', 'WuKong'),
-            ('/home/petterluo/project/FakeImageDetection/outputs/robust_test/anns/vqdm_jpg1_ann.txt', 'VQDM'),
-            ('/home/petterluo/project/FakeImageDetection/outputs/robust_test/anns/biggan_jpg1_ann.txt', 'Biggan'),
+            ('/home/scur0551/LASTED/annotation/val_Midjourney_new_original.txt', 'Midjourney'),
+            ('/home/scur0551/LASTED/annotation/val_stable_diffusion_v_1_5_new_original.txt', 'StableDiffusionV1.5'),
+            ('/home/scur0551/LASTED/annotation/val_ADM_new_original.txt', 'ADM'),
+            ('/home/scur0551/LASTED/annotation/val_VQDM_new_original.txt', 'VQDM'),
+            ('/home/scur0551/LASTED/annotation/val_BigGAN_new_original.txt', 'Biggan'),
         ]
     else:
         test_file_list = [
             (args.test_file, 'Test Dataset'),
         ]
+
     if not args.label_smooth:
         args.criterion_ce = nn.CrossEntropyLoss().to(device)
     else:
         args.criterion_ce = LabelSmoothingLoss(classes=args.num_class, smoothing=args.smoothing)
-    # args.criterion_ce = torch.nn.CrossEntropyLoss().cuda()
-    # args.torchKMeans = torchKMeans(verbose=False, n_clusters=2, distance=CosineSimilarity)
 
     params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    if not args.multiprocessing_distributed or (args.multiprocessing_distributed
-                                                and args.rank % ngpus_per_node == 0):
+    if not args.multiprocessing_distributed or (
+        args.multiprocessing_distributed and args.rank % ngpus_per_node == 0):
         logger.info('Params: %.2f' % (params / (1024 ** 2)))
 
     if args.resume != '':
@@ -626,46 +658,65 @@ def main(gpu, ngpus_per_node, args):
 
     parameters = [p for p in model.parameters() if p.requires_grad]
     optimizer = optim.Adam(parameters, lr=args.lr)
-    # optimizer = optim.AdamW(parameters, lr=args.lr)
-    lr_schedule = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=4, min_lr=1e-7)
-
+    lr_schedule = optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer, 
+        mode='max', 
+        factor=0.5, 
+        patience=4, 
+        min_lr=1e-7
+    )
     loss_meter = AverageMeter()
 
     for epoch in range(args.epoches):
+
         if args.distributed:
             train_sampler.set_epoch(epoch)
+
         model.train()
         train_data_loader.dataset.set_val_False()
+
         if args.isTrain == 1:
-            train_one_epoch(train_data_loader, model, optimizer, epoch, loss_meter, args, device, writer,
-                            ngpus_per_node)
+            train_one_epoch(
+                train_data_loader, 
+                model, 
+                optimizer, 
+                epoch, 
+                loss_meter, 
+                args, 
+                device, 
+                writer,
+                ngpus_per_node
+            )
 
             # 训练完直接保存，防止报错白训
             torch.save(model.state_dict(), os.path.join(args.out_dir, 'latest.pt'))
+
             if args.val_method == 'cluster':
                 val_auc, val_acc, val_ap = validation_cluster(model, args, args.val_file)
             elif args.val_method == 'sim':
                 val_auc, val_acc, val_ap = validation_similarity(model, args, args.val_file)
             else:
-                val_auc, val_acc, val_ap, val_raw_acc, val_r_acc, val_f_acc = validation_contrastive(model,
-                                                                                                     args,
-                                                                                                     args.val_file,
-                                                                                                     device,
-                                                                                                     ngpus_per_node)
+                val_auc, val_acc, val_ap, val_raw_acc, val_r_acc, val_f_acc = validation_contrastive(
+                    model,
+                    args,
+                    args.val_file,
+                    device,
+                    ngpus_per_node
+                )
 
             val_score = val_auc
-            if not args.multiprocessing_distributed or (args.multiprocessing_distributed
-                                                        and args.rank % ngpus_per_node == 0):
-                logger.info(
-                    f'Score: Validation AUC: {val_auc:.4f}, Acc: {val_acc:.4f}, AP: {val_ap:.4f}, Raw ACC{val_raw_acc:.4f},'
-                    f' Real ACC: {val_r_acc:.4f}, Fake ACC: {val_f_acc:.4f}')
+            if not args.multiprocessing_distributed or (
+                args.multiprocessing_distributed and args.rank % ngpus_per_node == 0):
+                logger.info(f'Score: Validation AUC: {val_auc:.4f}, Acc: {val_acc:.4f}, AP: {val_ap:.4f}, Raw ACC: {val_raw_acc:.4f}, Real ACC: {val_r_acc:.4f}, Fake ACC: {val_f_acc:.4f}')
                 logger.info('logging val to wandb')
+
                 writer.add_scalar('val/AUC', val_auc)
                 writer.add_scalar('val/ACC', val_acc)
                 writer.add_scalar('val/AP', val_ap)
                 writer.add_scalar('val/RawACC', val_raw_acc)
                 writer.add_scalar('val/RealACC', val_r_acc)
                 writer.add_scalar('val/FakeACC', val_f_acc)
+
                 if val_raw_acc > test_best_close:
                     test_best_close = val_raw_acc
                     saved_name = 'Val_best.pth'
@@ -688,18 +739,21 @@ def main(gpu, ngpus_per_node, args):
             elif args.val_method == 'sim':
                 test_auc, test_acc, test_ap = validation_similarity(model, args, test_file)
             else:
-                test_auc, test_acc, test_ap, test_raw_acc, test_r_acc, test_f_acc = validation_contrastive(model, args,
-                                                                                                           test_file,
-                                                                                                           device,
-                                                                                                           ngpus_per_node)
+                test_auc, test_acc, test_ap, test_raw_acc, test_r_acc, test_f_acc = validation_contrastive(
+                    model, 
+                    args,
+                    test_file,
+                    device,
+                    ngpus_per_node
+                )
             test_score_list.append(test_auc)
-            if not args.multiprocessing_distributed or (args.multiprocessing_distributed
-                                                        and args.rank % ngpus_per_node == 0):
+
+            if not args.multiprocessing_distributed or (
+                args.multiprocessing_distributed and args.rank % ngpus_per_node == 0):
                 logger.info(f'Eval res of {test_file}')
-                logger.info(
-                    f'Score of {nickname}: AUC: {test_auc:.4f}, Acc: {test_acc:.4f}, AP: {test_ap:.4f}'
-                    f', Raw ACC: {test_raw_acc:.4f}, Real ACC: {test_r_acc:.4f}, Fake ACC: {test_f_acc:.4f}')
+                logger.info(f'Score of {nickname}: AUC: {test_auc:.4f}, Acc: {test_acc:.4f}, AP: {test_ap:.4f}, Raw ACC: {test_raw_acc:.4f}, Real ACC: {test_r_acc:.4f}, Fake ACC: {test_f_acc:.4f}')
                 logger.info('logging test to wandb')
+
                 writer.add_scalar(f'test/AUC@{nickname}', test_auc)
                 writer.add_scalar(f'test/ACC@{nickname}', test_acc)
                 writer.add_scalar(f'test/AP@{nickname}', test_ap)
@@ -716,8 +770,8 @@ def main(gpu, ngpus_per_node, args):
                 ap_row.append(test_ap)
 
         test_score = np.mean(test_score_list)
-        if not args.multiprocessing_distributed or (args.multiprocessing_distributed
-                                                    and args.rank % ngpus_per_node == 0):
+        if not args.multiprocessing_distributed or (
+            args.multiprocessing_distributed and args.rank % ngpus_per_node == 0):
             table_data = [acc_row, raw_acc_row, ap_row, auc_row, real_acc_row, fake_acc_row]
             logger.info('\n' + tabulate(table_data, headers=table_header, tablefmt='psql'))
 
@@ -738,18 +792,6 @@ def main(gpu, ngpus_per_node, args):
         lr_schedule.step(test_score)
 
 
-def get_lr(optimizer):
-    for param_group in optimizer.param_groups:
-        return param_group['lr']
-
-
-class FakeWriter:
-    def __init__(self):
-        pass
-
-    def add_scalar(self, p1, p2, p3):
-        pass
-
 class WandbWriter:
     def __init__(self, run=None):
         self.run = run
@@ -763,6 +805,7 @@ class WandbWriter:
             step = self.step_count[tag]
         
         wandb.log({tag: value})
+
 
 if __name__ == '__main__':
 
@@ -805,6 +848,7 @@ if __name__ == '__main__':
     conf.add_argument("--wandb_project", type=str, default="LaRE",  help="Weights & Biases project name")
     conf.add_argument("--wandb_entity", type=str, default="deep-fake-uva",  help="Weights & Biases entity name (username or team name)")
     conf.add_argument('--map_file', type=str, default='')
+    conf.add_argument('--original_conf', action='store_true', default=False, help='Use this flag if dataset is original')
     # conf.add_argument('--reconstructed', action='store_true', default=False, help='Use this flag if dataset is reconstructed')
 
     args = conf.parse_args()
@@ -859,5 +903,3 @@ if __name__ == '__main__':
     else:
         # Simply call main_worker function
         main(args.gpu, 1, args)
-
-    # main(args)
