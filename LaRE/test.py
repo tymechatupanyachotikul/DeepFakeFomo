@@ -479,30 +479,28 @@ def main(gpu, ngpus_per_node, args):
 
     if args.test_file == '':
         test_file_list = [
-            ('/home/scur0551/LASTED/annotation/val_Midjourney.txt', 'Midjourney'),
+            ('/home/scur0551/LASTED/annotation/val_Midjourney_original.txt', 'Midjourney'),
             #('annotation/val_stable_diffusion_v_1_4_num12000.txt', 'StableDiffusionV1.4'),
-            ('/home/scur0551/LASTED/annotation/val_stable_diffusion_v_1_5.txt', 'StableDiffusionV1.5'),
-            ('/home/scur0551/LASTED/annotation/val_ADM.txt', 'ADM'),
+            ('/home/scur0551/LASTED/annotation/val_stable_diffusion_v_1_5_original.txt', 'StableDiffusionV1.5'),
+            ('/home/scur0551/LASTED/annotation/val_ADM_original.txt', 'ADM'),
             #('annotation/val_glide_num12000.txt', 'GLIDE'),
             #('/home/scur0551/LASTED/annotation/val_Midjourney.txt', 'WuKong'),
-            ('/home/scur0551/LASTED/annotation/val_VQDM.txt', 'VQDM'),
-            ('/home/scur0551/LASTED/annotation/val_BigGAN.txt', 'Biggan'),
+            ('/home/scur0551/LASTED/annotation/val_VQDM_original.txt', 'VQDM'),
+            ('/home/scur0551/LASTED/annotation/val_BigGAN_original.txt', 'Biggan'),
         ]
-    elif args.test_file == 'robust':
+    elif args.test_file == 'ai_new':
         test_file_list = [
-            ('/home/users/petterluo/project/FakeImageDetection/outputs/robust_test/anns/midjourney_gaussian3_ann.txt', 'Midjourney'),
-            ('/home/users/petterluo/project/FakeImageDetection/outputs/robust_test/anns/sdv4_gaussian3_ann.txt', 'StableDiffusionV1.4'),
-            ('/home/users/petterluo/project/FakeImageDetection/outputs/robust_test/anns/sdv5_gaussian3_ann.txt', 'StableDiffusionV1.5'),
-            ('/home/users/petterluo/project/FakeImageDetection/outputs/robust_test/anns/adm_gaussian3_ann.txt', 'ADM'),
-            ('/home/users/petterluo/project/FakeImageDetection/outputs/robust_test/anns/glide_gaussian3_ann.txt', 'GLIDE'),
-            ('/home/users/petterluo/project/FakeImageDetection/outputs/robust_test/anns/wukong_gaussian3_ann.txt', 'WuKong'),
-            ('/home/users/petterluo/project/FakeImageDetection/outputs/robust_test/anns/vqdm_gaussian3_ann.txt', 'VQDM'),
-            ('/home/users/petterluo/project/FakeImageDetection/outputs/robust_test/anns/biggan_gaussian3_ann.txt', 'Biggan'),
+            ('/home/scur0551/LASTED/annotation/val_Midjourney_new_original.txt', 'Midjourney'),
+            ('/home/scur0551/LASTED/annotation/val_stable_diffusion_v_1_5_new_original.txt', 'StableDiffusionV1.5'),
+            ('/home/scur0551/LASTED/annotation/val_ADM_new_original.txt', 'ADM'),
+            ('/home/scur0551/LASTED/annotation/val_VQDM_new_original.txt', 'VQDM'),
+            ('/home/scur0551/LASTED/annotation/val_BigGAN_new_original.txt', 'Biggan'),
         ]
     else:
         test_file_list = [
             (args.test_file, 'Test Dataset'),
         ]
+
     if not args.label_smooth:
         args.criterion_ce = nn.CrossEntropyLoss().to(device)
     else:
