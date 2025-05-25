@@ -658,12 +658,20 @@ def main(gpu, ngpus_per_node, args):
 
     parameters = [p for p in model.parameters() if p.requires_grad]
     optimizer = optim.Adam(parameters, lr=args.lr)
+    # lr_schedule = optim.lr_scheduler.ReduceLROnPlateau(
+    #     optimizer, 
+    #     mode='max', 
+    #     factor=0.5, 
+    #     patience=4, 
+    #     min_lr=1e-7
+    # )
     lr_schedule = optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, 
         mode='max', 
-        factor=0.5, 
-        patience=4, 
-        min_lr=1e-7
+        factor=0.1, 
+        patience=10, 
+        threshold=0.001,
+        min_lr=1e-6
     )
     loss_meter = AverageMeter()
 
@@ -789,9 +797,9 @@ def main(gpu, ngpus_per_node, args):
         if args.isTrain == 0:
             exit()
 
-        lr_schedule.step(test_score)
-
-
+        # lr_schedule.step(test_score)
+        lr_schedule.step(val_acc)
+            
 class WandbWriter:
     def __init__(self, run=None):
         self.run = run
@@ -848,7 +856,6 @@ if __name__ == '__main__':
     conf.add_argument("--wandb_project", type=str, default="LaRE",  help="Weights & Biases project name")
     conf.add_argument("--wandb_entity", type=str, default="deep-fake-uva",  help="Weights & Biases entity name (username or team name)")
     conf.add_argument('--map_file', type=str, default='')
-    conf.add_argument('--original_conf', action='store_true', default=False, help='Use this flag if dataset is original')
     # conf.add_argument('--reconstructed', action='store_true', default=False, help='Use this flag if dataset is reconstructed')
 
     args = conf.parse_args()
