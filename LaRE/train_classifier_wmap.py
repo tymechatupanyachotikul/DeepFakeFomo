@@ -125,7 +125,7 @@ class ImageDataset(Dataset):
             A.PadIfNeeded(min_height=self.data_size, min_width=self.data_size, p=1.0),
             A.RandomCrop(height=self.data_size, width=self.data_size, p=1.0),
             A.ImageCompression(quality_lower=30, quality_upper=100, p=0.5),
-            A.GaussianBlur(blur_limit=(0, 3), p=0.5),
+            A.GaussianBlur(sigma_limit=(0, 3), p=0.5),
             A.GaussNoise(var_limit=(10.0, 50.0), p=0.2),
             A.ToGray(p=0.2),
             A.RandomRotate90(p=0.33),
