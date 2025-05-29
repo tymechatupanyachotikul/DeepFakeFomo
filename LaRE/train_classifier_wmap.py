@@ -150,7 +150,7 @@ class ImageDataset(Dataset):
             #A.Resize(height=256, width=256, p=1.0),              
             #A.CenterCrop(height=self.data_size, width=self.data_size, p=1.0),
             A.PadIfNeeded(min_height=self.data_size, min_width=self.data_size, p=1.0),
-            A.RandomCrop(height=self.data_size, width=self.data_size, p=1.0),
+            A.CenterCrop(height=self.data_size, width=self.data_size, p=1.0),
             #A.CenterCrop(height=self.data_size, width=self.data_size, p=1.0),
             #A.ImageCompression(quality_lower=99, quality_upper=100, p=1.0),
         ], p=1.0)
