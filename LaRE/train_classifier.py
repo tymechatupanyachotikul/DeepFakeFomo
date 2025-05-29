@@ -123,17 +123,15 @@ class ImageDataset(Dataset):
         self.args = args
 
         self.albu_pre_train = A.Compose([
-                A.PadIfNeeded(min_height=self.data_size, min_width=self.data_size, p=1.0),
-                A.RandomCrop(height=self.data_size, width=self.data_size, p=1.0),
-                A.OneOf([
-                    A.ImageCompression(quality_lower=70, quality_upper=100, p=1.0),
-                    A.GaussianBlur(blur_limit=(3, 7), p=1.0),
-                    A.GaussNoise(var_limit=(3.0, 10.0), p=1.0),
-                    A.ToGray(p=1.0),
-                ], p=0.5),
-                A.RandomRotate90(p=0.33),
-                A.Flip(p=0.33),
-            ], p=1.0)
+            A.PadIfNeeded(min_height=self.data_size, min_width=self.data_size, p=1.0),
+            A.RandomCrop(height=self.data_size, width=self.data_size, p=1.0),
+            A.ImageCompression(quality_lower=30, quality_upper=100, p=0.5),
+            A.GaussianBlur(sigma_limit=(0, 3), p=0.5),
+            A.GaussNoise(var_limit=(10.0, 50.0), p=0.2),
+            A.ToGray(p=0.2),
+            A.RandomRotate90(p=0.33),
+            A.Flip(p=0.33),
+        ], p=1.0)
 
         if args.custom_conf:
             self.albu_pre_train_easy = A.Compose([
@@ -156,7 +154,7 @@ class ImageDataset(Dataset):
             ], p=1.0)
             self.albu_pre_val = A.Compose([             
                 A.PadIfNeeded(min_height=self.data_size, min_width=self.data_size, p=1.0),
-                A.CenterCrop(height=self.data_size, width=self.data_size, p=1.0),
+                A.RandomCrop(height=self.data_size, width=self.data_size, p=1.0),
             ], p=1.0)
 
         self.imagenet_norm = transforms.Compose([
