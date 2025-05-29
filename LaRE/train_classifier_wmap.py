@@ -602,10 +602,12 @@ def main(gpu, ngpus_per_node, args):
     else:
         train_sampler = None
 
+    logger.info(f'Shuffling data {(train_sampler is None and args.shuffle)}')
+
     train_data_loader = torch.utils.data.DataLoader(
         train_dataset, 
         batch_size=args.batch_size, 
-        shuffle=(train_sampler is None),
+        shuffle=(train_sampler is None and args.shuffle),
         num_workers=args.workers, 
         pin_memory=True, 
         sampler=train_sampler
@@ -857,6 +859,7 @@ if __name__ == '__main__':
     conf.add_argument("--wandb_entity", type=str, default="deep-fake-uva",  help="Weights & Biases entity name (username or team name)")
     conf.add_argument('--map_file', type=str, default='')
     # conf.add_argument('--reconstructed', action='store_true', default=False, help='Use this flag if dataset is reconstructed')
+    conf.add_argument("--shuffle", action='store_false', default=True)
 
     args = conf.parse_args()
 
